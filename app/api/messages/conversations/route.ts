@@ -1,17 +1,10 @@
-import { redirect } from 'next/navigation';
-import { getSession } from '@/app/lib/auth';
+import { NextResponse } from 'next/server';
 import db from '@/app/lib/db';
-import MessagesClient from './MessagesClient';
-import { cookies } from 'next/headers';
+import { getSession } from '@/app/lib/auth';
 
-export const dynamic = 'force-dynamic';
-
-export default async function MessagesPage() {
+export async function GET() {
   const session = await getSession();
-  if (!session) redirect('/login');
-
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth')?.value || '';
+  if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
   const [convos] = await db.execute(`
     SELECT c.*,
@@ -26,9 +19,5 @@ export default async function MessagesPage() {
     ORDER BY c.created_at DESC
   `, [session.id, session.id, session.id, session.id, session.id]) as any[];
 
-  return (
-          <main className="max-w-2xl mx-auto md:px-4 md:pt-2 md:pb-6 messages-page">
-        <MessagesClient conversations={convos as any[]} currentUser={session} />
-      </main>
-  );
+  return NextResponse.json(convos);
 }

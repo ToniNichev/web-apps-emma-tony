@@ -3,6 +3,10 @@ import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
 
 export async function GET() {
+  const session = await getSession();
+  const isSuperAdmin = session && (session.is_admin ?? 0) >= 2;
+  const hiddenFilter = isSuperAdmin ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
+
   const [posts] = await db.execute(`
     SELECT p.*, u.username, u.first_name, u.last_name, u.profile_picture,
       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) as like_count,
@@ -13,6 +17,7 @@ export async function GET() {
     FROM posts p
     JOIN users u ON p.user_id = u.id
     LEFT JOIN media m ON m.post_id = p.id
+    WHERE 1=1 ${hiddenFilter}
     GROUP BY p.id
     ORDER BY p.created_at DESC
     LIMIT 50
@@ -25,15 +30,18 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
-  const { content, media } = await request.json();
+  const { content, media, background } = await request.json();
 
   if (!content && (!media || media.length === 0)) {
     return NextResponse.json({ message: 'Post must have content or media' }, { status: 400 });
   }
 
+  const validBgs = ['sunset','ocean','purple','forest','gold','midnight','rose','hearts','daisies'];
+  const bg = validBgs.includes(background) ? background : null;
+
   const [result] = await db.execute(
-    'INSERT INTO posts (user_id, content) VALUES (?, ?)',
-    [session.id, content || '']
+    'INSERT INTO posts (user_id, content, background) VALUES (?, ?, ?)',
+    [session.id, content || '', bg]
   ) as any[];
 
   const postId = (result as any).insertId;

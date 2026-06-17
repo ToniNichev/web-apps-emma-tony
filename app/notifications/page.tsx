@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/app/lib/auth';
 import db from '@/app/lib/db';
-import NavBar from '@/app/components/NavBar';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -56,9 +55,7 @@ export default async function NotificationsPage() {
   );
 
   return (
-    <>
-      <NavBar user={session} />
-      <main className="max-w-2xl mx-auto px-4 py-6">
+          <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
         <h1 className="text-2xl font-bold mb-6">Notifications</h1>
         <div className="card overflow-hidden">
           {(notifs as any[]).length === 0 ? (
@@ -93,6 +90,5 @@ export default async function NotificationsPage() {
           )}
         </div>
       </main>
-    </>
   );
 }

@@ -32,16 +32,12 @@ export async function POST(request: Request) {
     is_admin: user.is_admin,
   });
 
-  const cookie = serialize('auth', token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30,
-    path: '/',
-  });
+  const cookieOpts = { httpOnly: false, secure: true, sameSite: 'lax' as const, path: '/' };
 
   const { password: _, ...safeUser } = user;
   const response = NextResponse.json({ user: safeUser }, { status: 200 });
-  response.headers.set('Set-Cookie', cookie);
+  response.headers.append('Set-Cookie', serialize('auth', token, { ...cookieOpts, httpOnly: true, maxAge: 60 * 60 * 24 * 30 }));
+  response.headers.append('Set-Cookie', serialize('theme', user.theme || 'bloom', { ...cookieOpts, maxAge: 60 * 60 * 24 * 365 }));
+  response.headers.append('Set-Cookie', serialize('dark', user.dark_mode ? '1' : '0', { ...cookieOpts, maxAge: 60 * 60 * 24 * 365 }));
   return response;
 }

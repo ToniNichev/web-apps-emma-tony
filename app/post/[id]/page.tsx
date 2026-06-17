@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
-import NavBar from '@/app/components/NavBar';
 import PostCard from '@/app/components/PostCard';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +30,6 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {session && <NavBar user={session} />}
       {!session && (
         <nav className="bg-white border-b border-gray-100">
           <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -42,7 +40,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
           </div>
         </nav>
       )}
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
         <PostCard post={post} currentUserId={session?.id ?? 0} isAdmin={!!session?.is_admin} />
       </main>
     </>
