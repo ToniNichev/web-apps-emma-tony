@@ -21,6 +21,22 @@ body { background-color: #f9fafb; }
 .brand-ring     { background: linear-gradient(to top right, var(--brand-from), var(--brand-to)); }
 .brand-text     { color: var(--brand-color); }
 
+/* ── Luna painting indicator ────────────────────────────── */
+@keyframes luna-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.luna-painting {
+  background: linear-gradient(120deg, var(--brand-from), var(--brand-to), var(--brand-from));
+  background-size: 200% 100%;
+  animation: luna-shimmer 2.2s linear infinite;
+}
+@keyframes luna-sparkle {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.15) rotate(8deg); }
+}
+.luna-sparkle { animation: luna-sparkle 1.6s ease-in-out infinite; }
+
 .card {
   background: white;
   border-radius: 1rem;
@@ -120,7 +136,8 @@ html.dark .bg-white.rounded-2xl { background-color: #1e293b !important; }
 
 /* Messages panel height */
 .messages-panel {
-  height: 70vh;
+  /* Full viewport minus top nav (3.5rem) and page padding (pt-2 + pb-6 = 2rem) */
+  height: calc(100vh - 5.5rem);
 }
 @media (max-width: 767px) {
   .messages-panel {

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAppSocket } from '@/app/components/SocketProvider';
 import type { Wallpaper } from '@/app/lib/wallpapers';
 import { WALLPAPERS } from '@/app/lib/wallpapers';
+import Lightbox from '@/app/components/Lightbox';
 
 interface Convo {
   id: number;
@@ -27,7 +28,7 @@ interface Message {
   username: string;
 }
 
-interface AIMessage { role: 'user' | 'assistant'; content: string; image?: string; pending?: 'text' | 'image'; }
+interface AIMessage { role: 'user' | 'assistant'; content: string; image?: string; pending?: 'text' | 'image'; progress?: number; }
 
 // ── Luna special conversation ─────────────────────────────
 const LUNA_ID = -1;
@@ -48,6 +49,35 @@ function LunaAvatar({ size = 10 }: { size?: number }) {
       style={{ background: 'linear-gradient(135deg,#7c3aed,#1e1b4b)', fontSize: px > 32 ? 18 : 14 }}
     >
       🌙
+    </div>
+  );
+}
+
+// ── Painting indicator (shown while an image is generating) ──
+const PAINTING_PHRASES = [
+  '🎨 Mixing colors…', '🖌️ Sketching it out…', '✨ Adding sparkles…',
+  '🌈 Almost there…', '💫 Final touches…',
+];
+
+function PaintingIndicator({ progress }: { progress?: number }) {
+  const [phrase, setPhrase] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPhrase(p => (p + 1) % PAINTING_PHRASES.length), 4000);
+    return () => clearInterval(id);
+  }, []);
+  const pct = progress != null ? Math.round(progress * 100) : null;
+  return (
+    <div className="luna-painting w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-2 text-white px-6">
+      <span className="luna-sparkle text-4xl">🪄</span>
+      <span className="text-xs font-semibold drop-shadow text-center">{PAINTING_PHRASES[phrase]}</span>
+      {pct !== null && (
+        <div className="w-full max-w-[140px]">
+          <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
+            <div className="h-full bg-white rounded-full transition-all duration-700 ease-out" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-[10px] text-center mt-1 opacity-90 font-semibold">{pct}%</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -97,6 +127,54 @@ function WallpaperPicker({ current, onSelect, onClose, anchorRect }: {
   );
 }
 
+// ── Share-to-feed modal ────────────────────────────────────
+function ShareModal({ imageUrl, onClose, onPosted }: {
+  imageUrl: string; onClose: () => void; onPosted: () => void;
+}) {
+  const [caption, setCaption] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  async function submit() {
+    setPosting(true);
+    const content = caption.trim() ? `${caption.trim()}\n\n🎨 Drawn by Luna` : '🎨 Drawn by Luna';
+    const res = await fetch('/api/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, media: [{ url: imageUrl, type: 'image' }], background: null }),
+    });
+    setPosting(false);
+    if (res.ok) onPosted();
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+        <img src={imageUrl} alt="" className="w-full aspect-square object-cover" />
+        <div className="p-4 space-y-3">
+          <textarea
+            value={caption}
+            onChange={e => setCaption(e.target.value)}
+            placeholder="Say something about it… (optional)"
+            rows={3}
+            maxLength={300}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
+          />
+          <div className="flex gap-2 justify-end">
+            <button onClick={onClose} className="px-4 py-2 rounded-full text-sm font-semibold text-gray-500 hover:bg-gray-100 transition">
+              Cancel
+            </button>
+            <button onClick={submit} disabled={posting}
+              className="brand-gradient text-white px-5 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition disabled:opacity-60">
+              {posting ? 'Posting…' : 'Post it! ✨'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Emoji picker ──────────────────────────────────────────
 const EMOJI_GROUPS = [
   { label: '😊', emoji: ['😀','😂','🥹','😊','😍','🥰','😘','😎','🤩','😏','😅','🤣','😇','🥳','😋','🤗','😌','🥺','😢','😭','😤','😠','🤯','😱','🤔','🫡','😴','🤤','😶','🫠'] },
@@ -129,10 +207,11 @@ function EmojiPicker({ onSelect }: { onSelect: (e: string) => void }) {
 
 // ── Main component ────────────────────────────────────────
 export default function MessagesClient({
-  conversations, currentUser
+  conversations, currentUser, lunaName = 'Luna'
 }: {
   conversations: Convo[];
   currentUser: { id: number; username: string; first_name: string; profile_picture?: string | null };
+  lunaName?: string;
 }) {
   const socket = useAppSocket();
   const [convos, setConvos] = useState(conversations);
@@ -144,21 +223,13 @@ export default function MessagesClient({
   const [showEmoji, setShowEmoji] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
   const [wallpaper, setWallpaper] = useState<Wallpaper>(WALLPAPERS[0]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [shareImage, setShareImage] = useState<string | null>(null);
+  const [posted, setPosted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   const wallpaperBtnRef = useRef<HTMLButtonElement>(null);
-
-  // Load Luna history from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('luna-chat');
-    if (saved) try { setLunaMessages(JSON.parse(saved)); } catch {}
-  }, []);
-
-  // Persist Luna history
-  useEffect(() => {
-    localStorage.setItem('luna-chat', JSON.stringify(lunaMessages));
-  }, [lunaMessages]);
 
   useEffect(() => {
     if (!socket) return;
@@ -216,6 +287,8 @@ export default function MessagesClient({
         ? WALLPAPERS.find(w => w.id === savedWp)
         : WALLPAPERS.find(w => w.id === 'midnight');
       setWallpaper(found ?? WALLPAPERS[0]);
+      const res = await fetch('/api/ai/messages');
+      if (res.ok) setLunaMessages(await res.json());
       return;
     }
     loadWallpaper(convo.id);
@@ -253,14 +326,13 @@ export default function MessagesClient({
     setText('');
     setShowEmoji(false);
     const userMsg: AIMessage = { role: 'user', content };
-    const history = [...lunaMessages, userMsg];
-    setLunaMessages([...history, { role: 'assistant', content: '', pending: 'text' }]);
+    setLunaMessages(ms => [...ms, userMsg, { role: 'assistant', content: '', pending: 'text' }]);
     setLunaStreaming(true);
     try {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ message: content }),
       });
       if (!res.ok || !res.body) { setLunaStreaming(false); return; }
       const reader = res.body.getReader();
@@ -301,13 +373,36 @@ export default function MessagesClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
-      const data = await res.json();
-      setLunaMessages(ms => [
-        ...ms.slice(0, -1),
-        res.ok
-          ? { role: 'assistant', content: '', image: data.url }
-          : { role: 'assistant', content: data.error || "I couldn't paint that one, try again? 🌙" },
-      ]);
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setLunaMessages(ms => [
+          ...ms.slice(0, -1),
+          { role: 'assistant', content: data.error || "I couldn't paint that one, try again? 🌙" },
+        ]);
+      } else {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            let data: { progress?: number; url?: string; error?: string };
+            try { data = JSON.parse(line); } catch { continue; }
+            if (typeof data.progress === 'number') {
+              setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: '', pending: 'image', progress: data.progress }]);
+            } else if (data.url) {
+              setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: '', image: data.url }]);
+            } else if (data.error) {
+              setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: data.error || "I couldn't paint that one, try again? 🌙" }]);
+            }
+          }
+        }
+      }
     } catch {
       setLunaMessages(ms => [
         ...ms.slice(0, -1),
@@ -330,6 +425,7 @@ export default function MessagesClient({
 
   const isDark = wallpaper.dark;
   const inLuna = isLuna(activeConvo);
+  const lunaImageGallery = lunaMessages.filter(m => m.image).map(m => m.image as string);
 
   return (
     <div className="card overflow-hidden messages-panel flex">
@@ -342,7 +438,7 @@ export default function MessagesClient({
             className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition text-left border-b border-purple-100 ${inLuna ? 'bg-purple-50' : ''}`}>
             <LunaAvatar />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm text-purple-800">Luna ✨ <span className="text-xs font-normal text-purple-400">AI friend</span></p>
+              <p className="font-semibold text-sm text-purple-800">{lunaName} ✨ <span className="text-xs font-normal text-purple-400">AI friend</span></p>
               <p className="text-xs text-purple-300 truncate">Ask me anything 🌙</p>
             </div>
           </button>
@@ -380,7 +476,7 @@ export default function MessagesClient({
                 <button onClick={() => setActiveConvo(null)} className="md:hidden text-gray-400 hover:text-gray-600 transition mr-1 text-xl leading-none">‹</button>
                 {inLuna ? <LunaAvatar size={8} /> : <Avatar name={activeConvo.other_first_name} pic={activeConvo.other_profile_picture} size={8} />}
                 {inLuna
-                  ? <span className="font-semibold text-sm text-purple-800">Luna ✨</span>
+                  ? <span className="font-semibold text-sm text-purple-800">{lunaName} ✨</span>
                   : <Link href={`/profile/${activeConvo.other_username}`} className="font-semibold text-sm hover:text-pink-500">{activeConvo.other_first_name}</Link>
                 }
               </div>
@@ -412,7 +508,7 @@ export default function MessagesClient({
                 lunaMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                     <div className="text-5xl">🌙</div>
-                    <p className={`text-sm font-semibold ${isDark ? 'text-white/80' : 'text-purple-700'}`}>Hi! I'm Luna ✨</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white/80' : 'text-purple-700'}`}>Hi! I&apos;m {lunaName} ✨</p>
                     <p className={`text-xs max-w-xs ${isDark ? 'text-white/60' : 'text-purple-400'}`}>I'm your magical AI friend. Ask me anything — jokes, stories, fun facts, games… 🎉</p>
                   </div>
                 ) : (
@@ -422,7 +518,7 @@ export default function MessagesClient({
                         <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mr-1.5 self-end text-xs"
                           style={{ background: 'linear-gradient(135deg,#7c3aed,#1e1b4b)' }}>🌙</div>
                       )}
-                      <div className={`max-w-xs rounded-2xl text-sm leading-relaxed shadow-sm ${m.image ? 'p-1.5' : 'px-4 py-2'} ${
+                      <div className={`max-w-xs rounded-2xl text-sm leading-relaxed shadow-sm ${(m.image || m.pending === 'image') ? 'p-1.5 w-64' : 'px-4 py-2'} ${
                         m.role === 'user'
                           ? 'brand-gradient text-white rounded-br-sm'
                           : isDark
@@ -430,12 +526,31 @@ export default function MessagesClient({
                             : 'bg-purple-100 text-purple-900 rounded-bl-sm'
                       }`}>
                         {m.image
-                          ? <img src={m.image} alt="" className="rounded-xl w-full" />
-                          : m.content || (
-                            <span className="animate-pulse opacity-60">
-                              {m.pending === 'image' ? '🎨 painting… (can take a minute!)' : '✨ thinking…'}
-                            </span>
-                          )}
+                          ? (
+                            <div className="relative group">
+                              <img src={m.image} alt="" className="rounded-xl w-full" />
+                              <div className="absolute bottom-1.5 right-1.5 flex gap-1">
+                                <a href={m.image} download
+                                  title="Download"
+                                  className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center text-xs backdrop-blur-sm transition">
+                                  ⬇️
+                                </a>
+                                <button type="button" onClick={() => setLightboxIndex(lunaImageGallery.indexOf(m.image!))}
+                                  title="View fullscreen"
+                                  className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center text-xs backdrop-blur-sm transition">
+                                  ⛶
+                                </button>
+                                <button type="button" onClick={() => setShareImage(m.image!)}
+                                  title="Share as a post"
+                                  className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center text-xs backdrop-blur-sm transition">
+                                  📤
+                                </button>
+                              </div>
+                            </div>
+                          )
+                          : m.pending === 'image'
+                            ? <PaintingIndicator progress={m.progress} />
+                            : m.content || <span className="animate-pulse opacity-60">✨ thinking…</span>}
                       </div>
                     </div>
                   ))
@@ -469,23 +584,45 @@ export default function MessagesClient({
                 {showEmoji && <EmojiPicker onSelect={insertEmoji} />}
               </div>
               <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
-                placeholder={inLuna ? 'Ask Luna anything, or describe a picture… 🌙' : 'Message…'}
-                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 transition" />
+                placeholder={inLuna ? `Ask ${lunaName} anything, or describe a picture… 🌙` : 'Message…'}
+                className="flex-1 min-w-0 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 transition" />
               {inLuna && (
                 <button type="button" onClick={sendLunaImage} disabled={!text.trim() || lunaStreaming}
-                  title="Ask Luna to draw this"
-                  className="text-white text-sm font-semibold px-4 py-2 rounded-full hover:opacity-90 transition disabled:opacity-40 bg-pink-500">
+                  title={`Ask ${lunaName} to draw this`}
+                  className="flex-shrink-0 text-lg p-1.5 rounded-full transition-all duration-150 disabled:opacity-40 bg-pink-100 hover:bg-pink-200 hover:scale-110 hover:shadow-md active:scale-95">
                   🎨
                 </button>
               )}
               <button type="submit" disabled={!text.trim() || (inLuna && lunaStreaming)}
-                className={`text-white text-sm font-semibold px-5 py-2 rounded-full hover:opacity-90 transition disabled:opacity-40 ${inLuna ? 'bg-purple-600' : 'brand-gradient'}`}>
+                className={`flex-shrink-0 text-white text-sm font-semibold px-4 py-2 rounded-full transition-all duration-150 disabled:opacity-40 disabled:hover:scale-100 hover:opacity-90 hover:scale-105 hover:shadow-md active:scale-95 ${inLuna ? 'bg-purple-600' : 'brand-gradient'}`}>
                 {inLuna && lunaStreaming ? '✨' : 'Send'}
               </button>
             </form>
           </>
         )}
       </div>
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          urls={lunaImageGallery}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex(i => Math.max(0, (i ?? 0) - 1))}
+          onNext={() => setLightboxIndex(i => Math.min(lunaImageGallery.length - 1, (i ?? 0) + 1))}
+        />
+      )}
+      {shareImage && (
+        <ShareModal
+          imageUrl={shareImage}
+          onClose={() => setShareImage(null)}
+          onPosted={() => { setShareImage(null); setPosted(true); setTimeout(() => setPosted(false), 2500); }}
+        />
+      )}
+      {posted && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[1000] brand-gradient text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg">
+          Posted to your feed! ✨
+        </div>
+      )}
     </div>
   );
 }

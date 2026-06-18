@@ -15,7 +15,7 @@ export async function PATCH(request: Request) {
   const session = await getSession();
   if (!session?.is_admin) return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
   const body = await request.json();
-  const allowed = ['site_name','site_tagline','default_theme','banner_enabled','banner_text','banner_image','banner_bg'];
+  const allowed = ['site_name','site_tagline','default_theme','banner_enabled','banner_text','banner_image','banner_bg','luna_name','luna_persona'];
   for (const [key, value] of Object.entries(body)) {
     if (allowed.includes(key)) {
       const v = String(value ?? '');

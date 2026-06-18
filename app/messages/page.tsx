@@ -3,6 +3,7 @@ import { getSession } from '@/app/lib/auth';
 import db from '@/app/lib/db';
 import MessagesClient from './MessagesClient';
 import { cookies } from 'next/headers';
+import { getSiteSettings } from '@/app/lib/site-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export default async function MessagesPage() {
 
   const cookieStore = await cookies();
   const token = cookieStore.get('auth')?.value || '';
+  const siteSettings = await getSiteSettings();
 
   const [convos] = await db.execute(`
     SELECT c.*,
@@ -28,7 +30,7 @@ export default async function MessagesPage() {
 
   return (
           <main className="max-w-2xl mx-auto md:px-4 md:pt-2 md:pb-6 messages-page">
-        <MessagesClient conversations={convos as any[]} currentUser={session} />
+        <MessagesClient conversations={convos as any[]} currentUser={session} lunaName={siteSettings.luna_name} />
       </main>
   );
 }

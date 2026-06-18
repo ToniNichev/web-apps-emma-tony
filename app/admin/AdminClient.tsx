@@ -10,7 +10,7 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'banner' | 'users' | 'recap';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'recap';
 
 export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [tab, setTab] = useState<Tab>('site');
@@ -111,14 +111,14 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl">
-        {(['site', 'banner', 'users', 'recap'] as Tab[]).map(t => (
+        {(['site', 'luna', 'banner', 'users', 'recap'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold transition flex flex-col items-center gap-0.5 ${tab === t ? 'bg-white shadow brand-text' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            <span className="text-base">{t === 'site' ? '🎨' : t === 'banner' ? '📢' : t === 'users' ? '👥' : '📊'}</span>
-            <span>{t === 'site' ? 'Site' : t === 'banner' ? 'Banner' : t === 'users' ? 'Users' : 'Recap'}</span>
+            <span className="text-base">{t === 'site' ? '🎨' : t === 'luna' ? '🌙' : t === 'banner' ? '📢' : t === 'users' ? '👥' : '📊'}</span>
+            <span>{t === 'site' ? 'Site' : t === 'luna' ? 'Luna' : t === 'banner' ? 'Banner' : t === 'users' ? 'Users' : 'Recap'}</span>
           </button>
         ))}
       </div>
@@ -270,6 +270,40 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
             className="brand-gradient text-white font-semibold px-6 py-2.5 rounded-full text-sm hover:opacity-90 transition disabled:opacity-60"
           >
             {saved ? '✓ Saved!' : saving ? 'Saving…' : 'Save banner'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Luna tab ── */}
+      {tab === 'luna' && (
+        <div className="card p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Luna&apos;s name</label>
+            <input
+              value={settings.luna_name || ''}
+              onChange={e => set('luna_name', e.target.value)}
+              placeholder="Luna"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Personality</label>
+            <textarea
+              value={settings.luna_persona || ''}
+              onChange={e => set('luna_persona', e.target.value)}
+              placeholder="You love talking about art, animals, music, creative stories, fun facts, jokes, and games like 20 questions or would-you-rather. Be encouraging, upbeat, and use emojis naturally but not excessively."
+              rows={5}
+              maxLength={600}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+            />
+            <p className="text-xs text-gray-400 mt-1">This describes how Luna talks and what she&apos;s interested in. Safety rules (no inappropriate content, short replies) always apply no matter what&apos;s written here.</p>
+          </div>
+          <button
+            onClick={() => save({ luna_name: settings.luna_name || '', luna_persona: settings.luna_persona || '' })}
+            disabled={saving}
+            className="brand-gradient text-white font-semibold px-6 py-2.5 rounded-full text-sm hover:opacity-90 transition disabled:opacity-60"
+          >
+            {saved ? '✓ Saved!' : saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       )}

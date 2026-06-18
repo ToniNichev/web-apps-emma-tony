@@ -8,7 +8,11 @@ export interface SiteSettings {
   banner_text: string;
   banner_image: string;
   banner_bg: string;
+  luna_name: string;
+  luna_persona: string;
 }
+
+export const DEFAULT_LUNA_PERSONA = 'You love talking about art, animals, music, creative stories, fun facts, jokes, and games like 20 questions or would-you-rather. Be encouraging, upbeat, and use emojis naturally but not excessively.';
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   const [rows] = await db.execute('SELECT `key`, `value` FROM site_settings') as any[];
@@ -22,5 +26,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     banner_text:    map.banner_text    || '',
     banner_image:   map.banner_image   || '',
     banner_bg:      map.banner_bg      || 'none',
+    luna_name:      map.luna_name      || 'Luna',
+    luna_persona:   map.luna_persona   || DEFAULT_LUNA_PERSONA,
   };
 }

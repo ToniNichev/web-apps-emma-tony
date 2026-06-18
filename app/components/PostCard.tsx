@@ -6,7 +6,7 @@ import PostContent from './UrlEmbed';
 import { getBg } from '@/app/lib/backgrounds';
 import Lightbox from './Lightbox';
 
-interface Post {
+export interface Post {
   id: number;
   user_id: number;
   content: string;
@@ -35,12 +35,13 @@ function timeAgo(dateStr: string) {
 }
 
 export default function PostCard({
-  post, currentUserId, isAdmin, isSuperAdmin,
+  post, currentUserId, isAdmin, isSuperAdmin, onImageClick,
 }: {
   post: Post;
   currentUserId: number;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
+  onImageClick?: (url: string) => void;
 }) {
   const router = useRouter();
   const [liked, setLiked] = useState(false);
@@ -117,7 +118,7 @@ export default function PostCard({
 
   return (
     <>
-      {lightboxIndex !== null && (
+      {!onImageClick && lightboxIndex !== null && (
         <Lightbox
           urls={imageUrls}
           index={lightboxIndex}
@@ -214,7 +215,7 @@ export default function PostCard({
                   loading="lazy"
                   decoding="async"
                   className="w-full object-cover max-h-96 cursor-zoom-in"
-                  onClick={() => setLightboxIndex(imageUrls.indexOf(url))}
+                  onClick={() => onImageClick ? onImageClick(url) : setLightboxIndex(imageUrls.indexOf(url))}
                 />
               )
             )}
