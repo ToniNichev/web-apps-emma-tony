@@ -16,6 +16,37 @@ export async function POST(request: Request) {
     [challenge_id, session.id, content?.trim() || null, media_url || null, media_type || null]
   );
 
+  // Notify: challenge creator + all previous responders (excluding self)
+  const [challengeRows] = await db.execute(
+    'SELECT created_by, prompt, emoji FROM daily_challenges WHERE id = ?',
+    [challenge_id]
+  ) as any[];
+  const challenge = (challengeRows as any[])[0];
+
+  if (challenge) {
+    const preview = content?.trim()
+      ? content.trim().substring(0, 80)
+      : '(shared a photo/video)';
+
+    // Collect unique user IDs to notify: creator + previous responders
+    const [responderRows] = await db.execute(
+      'SELECT DISTINCT user_id FROM challenge_responses WHERE challenge_id = ? AND user_id != ?',
+      [challenge_id, session.id]
+    ) as any[];
+
+    const toNotify = new Set<number>();
+    if (challenge.created_by !== session.id) toNotify.add(challenge.created_by);
+    for (const r of responderRows as any[]) toNotify.add(r.user_id);
+
+    for (const userId of toNotify) {
+      await db.execute(
+        `INSERT INTO notifications (user_id, actor_id, type, message_preview)
+         VALUES (?, ?, 'challenge_response', ?)`,
+        [userId, session.id, preview]
+      );
+    }
+  }
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 

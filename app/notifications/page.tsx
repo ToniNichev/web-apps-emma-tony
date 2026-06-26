@@ -23,11 +23,13 @@ function notifText(n: any) {
     case 'follow': return 'started following you';
     case 'message': return `sent you a message: "${n.message_preview}"`;
     case 'poll_vote': return 'voted on your poll';
+    case 'challenge_response': return "responded to today's challenge 🎯";
   }
 }
 
 function notifLink(n: any) {
   if (n.type === 'message') return '/messages';
+  if (n.type === 'challenge_response') return '/challenges';
   if (n.type === 'follow') return `/profile/${encodeURIComponent(n.actor_username)}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
@@ -84,7 +86,7 @@ export default async function NotificationsPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
                 </div>
                 <span className="text-lg">
-                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : '📩'}
+                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : n.type === 'challenge_response' ? '🎯' : '📩'}
                 </span>
               </Link>
             ))

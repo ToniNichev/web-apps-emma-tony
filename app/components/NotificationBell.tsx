@@ -5,7 +5,7 @@ import { useAppSocket } from './SocketProvider';
 
 interface Notification {
   id: number;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response';
   actor_first_name: string;
   actor_username: string;
   actor_profile_picture: string | null;
@@ -32,27 +32,46 @@ function notifText(n: Notification) {
     case 'follow': return 'started following you';
     case 'message': return `sent you a message: "${n.message_preview}"`;
     case 'poll_vote': return 'voted on your poll';
+    case 'challenge_response': return `responded to today's challenge 🎯`;
   }
 }
 
 function notifLink(n: Notification) {
   if (n.type === 'message') return '/messages';
   if (n.type === 'follow') return `/profile/${n.actor_username}`;
+  if (n.type === 'challenge_response') return '/challenges';
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
+}
+
+function showBrowserNotif(n: Notification) {
+  if (typeof window === 'undefined' || Notification.permission !== 'granted') return;
+  const body = `${n.actor_first_name} ${notifText(n)}`;
+  try {
+    new Notification("Emma's Space 🌸", { body, icon: '/icon.svg' });
+  } catch {}
 }
 
 export default function NotificationBell() {
   const socket = useAppSocket();
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const seenIds = useRef<Set<number>>(new Set());
   const ref = useRef<HTMLDivElement>(null);
 
   const unread = notifs.filter(n => !n.read_at).length;
 
-  async function load() {
+  async function load(showNew = false) {
     const res = await fetch('/api/notifications');
-    if (res.ok) setNotifs(await res.json());
+    if (!res.ok) return;
+    const data: Notification[] = await res.json();
+    if (showNew) {
+      for (const n of data) {
+        if (!seenIds.current.has(n.id) && !n.read_at) showBrowserNotif(n);
+      }
+    }
+    for (const n of data) seenIds.current.add(n.id);
+    setNotifs(data);
   }
 
   async function markRead() {
@@ -61,16 +80,24 @@ export default function NotificationBell() {
   }
 
   useEffect(() => {
-    load();
+    // Request permission then do initial load
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    load(false);
+
+    // Poll every 30s for new notifications
+    const interval = setInterval(() => load(true), 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (!socket) return;
-
     function onNotification(n: Notification) {
       setNotifs(prev => [n, ...prev]);
+      seenIds.current.add(n.id);
+      showBrowserNotif(n);
     }
-
     socket.on('notification', onNotification);
     return () => { socket.off('notification', onNotification); };
   }, [socket]);
