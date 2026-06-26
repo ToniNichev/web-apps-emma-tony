@@ -10,7 +10,7 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge';
 
 type Invite = {
   id: number;
@@ -36,6 +36,11 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const [recapPeriod, setRecapPeriod] = useState('week');
   const [recap, setRecap] = useState<any | null>(null);
   const [recapLoading, setRecapLoading] = useState(false);
+  const [challengePrompt, setChallengePrompt] = useState("");
+  const [challengeEmoji, setChallengeEmoji] = useState("🌟");
+  const [challengeDate, setChallengeDate] = useState(new Date().toISOString().slice(0, 10));
+  const [challengeSaving, setChallengeSaving] = useState(false);
+  const [challengeSaved, setChallengeSaved] = useState(false);
   const bannerFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -147,6 +152,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     { id: 'users',   label: 'Users',   emoji: '👥' },
     { id: 'invites', label: 'Invites', emoji: '🔑' },
     { id: 'recap',   label: 'Recap',   emoji: '📊' },
+    { id: 'challenge', label: 'Challenge', emoji: '🎯' },
   ];
 
   return (
@@ -566,6 +572,81 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
               )}
             </>
           )}
+        </div>
+      )}
+      {/* ── Challenge tab ── */}
+      {tab === 'challenge' && (
+        <div className="space-y-4">
+          <div className="card p-6 space-y-4">
+            <div>
+              <p className="font-semibold text-gray-700 text-sm mb-1">Daily Challenge</p>
+              <p className="text-xs text-gray-400">Set a fun challenge for today — it shows at the top of everyone's feed.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Emoji</label>
+                <input
+                  value={challengeEmoji}
+                  onChange={e => setChallengeEmoji(e.target.value)}
+                  maxLength={2}
+                  className="w-16 border border-gray-200 rounded-xl px-3 py-2.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Prompt</label>
+                <input
+                  value={challengePrompt}
+                  onChange={e => setChallengePrompt(e.target.value)}
+                  placeholder="Post a photo of something that made you smile today!"
+                  maxLength={200}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Date</label>
+              <input
+                type="date"
+                value={challengeDate}
+                onChange={e => setChallengeDate(e.target.value)}
+                className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+              />
+            </div>
+
+            {challengePrompt && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">Preview</p>
+                <div className="brand-gradient rounded-2xl px-5 py-4 flex items-center gap-3">
+                  <span className="text-4xl">{challengeEmoji}</span>
+                  <div>
+                    <p className="text-white/80 text-xs font-semibold uppercase tracking-wide">Daily Challenge</p>
+                    <p className="text-white font-bold text-base leading-snug mt-0.5">{challengePrompt}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={async () => {
+                if (!challengePrompt.trim()) return;
+                setChallengeSaving(true);
+                await fetch('/api/challenge', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prompt: challengePrompt, emoji: challengeEmoji, active_date: challengeDate }),
+                });
+                setChallengeSaving(false);
+                setChallengeSaved(true);
+                setTimeout(() => setChallengeSaved(false), 2500);
+              }}
+              disabled={challengeSaving || !challengePrompt.trim()}
+              className="brand-gradient text-white font-semibold px-6 py-2.5 rounded-full text-sm hover:opacity-90 transition disabled:opacity-60"
+            >
+              {challengeSaved ? '✓ Challenge set!' : challengeSaving ? 'Saving…' : 'Set challenge'}
+            </button>
+          </div>
         </div>
       )}
     </>

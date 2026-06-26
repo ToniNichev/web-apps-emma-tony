@@ -8,6 +8,7 @@ import Feed from '@/app/components/Feed';
 import StoriesBar from '@/app/components/StoriesBar';
 import { POSTS_PAGE_SIZE } from '@/app/lib/constants';
 import RightNowBanner from '@/app/components/RightNowBanner';
+import DailyChallenge from '@/app/components/DailyChallenge';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +20,9 @@ export default async function HomePage() {
 
   const isSuperAdmin = (session.is_admin ?? 0) >= 2;
   const hiddenFilter = isSuperAdmin ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
+  const today = new Date().toISOString().slice(0, 10);
 
-  const [settings, stories, posts] = await Promise.all([
+  const [settings, stories, posts, challengeResult] = await Promise.all([
     getSiteSettings(),
 
     db.execute(`
@@ -55,6 +57,14 @@ export default async function HomePage() {
       ORDER BY p.id DESC
       LIMIT ${POSTS_PAGE_SIZE}
     `, [session.id]),
+
+    db.execute(
+      `SELECT dc.id, dc.prompt, dc.emoji, dc.active_date,
+         (SELECT COUNT(*) FROM challenge_responses cr WHERE cr.challenge_id = dc.id) as response_count,
+         (SELECT id FROM challenge_responses cr WHERE cr.challenge_id = dc.id AND cr.user_id = ?) as my_response_id
+       FROM daily_challenges dc WHERE dc.active_date = ?`,
+      [session.id, today]
+    ),
   ]);
 
   const storyRows = (stories as any[][])[0] as any[];
@@ -79,6 +89,23 @@ export default async function HomePage() {
       : [{ user_id: session.id, username: session.username, first_name: session.first_name, profile_picture: session.profile_picture || null, stories: [], has_unseen: false }]),
     ...Array.from(storyUserMap.values()).filter(g => g.user_id !== session.id),
   ];
+
+  const challengeRows = (challengeResult as any[][])[0] as any[];
+  const todayChallenge = challengeRows[0] ?? null;
+
+  let challengeWithResponses = null;
+  if (todayChallenge) {
+    const [responses] = await db.execute(
+      `SELECT cr.id, cr.content, cr.media_url, cr.media_type, cr.created_at,
+         u.username, u.first_name, u.profile_picture
+       FROM challenge_responses cr
+       JOIN users u ON u.id = cr.user_id
+       WHERE cr.challenge_id = ?
+       ORDER BY cr.created_at ASC`,
+      [todayChallenge.id]
+    ) as any[];
+    challengeWithResponses = { ...todayChallenge, responses };
+  }
 
   const bannerBg  = settings.banner_bg || 'none';
   const bgOpt     = getBg(bannerBg);
@@ -113,6 +140,7 @@ export default async function HomePage() {
 
       <StoriesBar initialStories={storyGroups} currentUserId={session.id} />
       <RightNowBanner />
+      <DailyChallenge initial={challengeWithResponses} />
 
       {postRows.length === 0 ? (
         <div className="card p-12 text-center">
