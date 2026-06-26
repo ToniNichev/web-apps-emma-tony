@@ -114,6 +114,13 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
                 >
                   <span>⚙️</span> Settings
                 </Link>
+                <Link
+                  href="/challenges"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                >
+                  <span>🎯</span> Challenges
+                </Link>
                 {user.is_admin ? (
                   <Link
                     href="/admin"
