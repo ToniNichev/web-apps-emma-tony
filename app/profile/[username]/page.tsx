@@ -20,7 +20,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   const username = decodeURIComponent(rawUsername);
 
   const [users] = await db.execute(
-    'SELECT id, username, first_name, last_name, bio, profile_picture, cover_photo, created_at FROM users WHERE username = ?',
+    'SELECT id, username, first_name, last_name, bio, profile_picture, cover_photo, created_at, now_playing_song, now_playing_artist, birthday FROM users WHERE username = ?',
     [username]
   ) as any[];
 
@@ -86,6 +86,25 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
           </div>
           <p className="text-gray-400 text-sm">@{user.username}</p>
           {user.bio && <p className="text-gray-600 text-sm mt-2">{user.bio}</p>}
+          {user.now_playing_song && (
+            <div className="inline-flex items-center gap-2 mt-2 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
+              <span className="text-sm">🎵</span>
+              <span className="text-xs text-gray-700 font-medium truncate max-w-[200px]">
+                {user.now_playing_song}{user.now_playing_artist ? <span className="text-gray-400"> — {user.now_playing_artist}</span> : null}
+              </span>
+            </div>
+          )}
+          {user.birthday && (() => {
+            const bd = new Date(user.birthday + 'T12:00:00');
+            const today = new Date();
+            const isToday = bd.getMonth() === today.getMonth() && bd.getDate() === today.getDate();
+            const label = bd.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+            return (
+              <p className={"text-xs mt-2 " + (isToday ? 'text-pink-500 font-bold' : 'text-gray-400')}>
+                {isToday ? 'Happy birthday! 🎂' : 'Birthday: ' + label}
+              </p>
+            );
+          })()}
           <div className="flex gap-6 mt-4 text-sm">
             <div><span className="font-bold">{(posts as any[]).length}</span> <span className="text-gray-400">posts</span></div>
             <div><span className="font-bold">{followerCount}</span> <span className="text-gray-400">followers</span></div>

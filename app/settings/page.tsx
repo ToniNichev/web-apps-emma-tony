@@ -13,7 +13,7 @@ export default async function SettingsPage() {
   if (!session) redirect('/login');
 
   const [rows] = await db.execute(
-    'SELECT first_name, last_name, bio, profile_picture, username, theme, dark_mode FROM users WHERE id = ?',
+    'SELECT first_name, last_name, bio, profile_picture, username, theme, dark_mode, now_playing_song, now_playing_artist, birthday FROM users WHERE id = ?',
     [session.id]
   ) as any[];
   const user = (rows as any[])[0];

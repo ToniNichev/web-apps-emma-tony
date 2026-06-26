@@ -19,6 +19,9 @@ interface Props {
     username: string;
     theme: string;
     dark_mode: number;
+    now_playing_song: string | null;
+    now_playing_artist: string | null;
+    birthday: string | null;
   };
 }
 
@@ -29,6 +32,9 @@ export default function SettingsClient({ user }: Props) {
     last_name: user.last_name || '',
     bio: user.bio || '',
     profile_picture: user.profile_picture || '',
+    now_playing_song: user.now_playing_song || '',
+    now_playing_artist: user.now_playing_artist || '',
+    birthday: user.birthday || '',
   });
   const [passwords, setPasswords] = useState({ current_password: '', new_password: '', confirm: '' });
   const [currentTheme, setCurrentTheme] = useState(user.theme || 'bloom');
@@ -170,6 +176,40 @@ export default function SettingsClient({ user }: Props) {
               placeholder="Tell the world about yourself ✨"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">🎵 Now playing</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={profile.now_playing_song}
+                onChange={e => setProfile(p => ({ ...p, now_playing_song: e.target.value }))}
+                placeholder="Song name"
+                maxLength={100}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+              />
+              <input
+                type="text"
+                value={profile.now_playing_artist}
+                onChange={e => setProfile(p => ({ ...p, now_playing_artist: e.target.value }))}
+                placeholder="Artist"
+                maxLength={100}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Shows as a music badge on your profile</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">🎂 Birthday</label>
+            <input
+              type="date"
+              value={profile.birthday}
+              onChange={e => setProfile(p => ({ ...p, birthday: e.target.value }))}
+              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+            />
+            <p className="text-xs text-gray-400 mt-1">Your friends will see a birthday card on your special day</p>
           </div>
 
           {msg && <p className={`text-sm ${msg.startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>{msg}</p>}

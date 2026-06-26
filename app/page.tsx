@@ -22,7 +22,7 @@ export default async function HomePage() {
   const hiddenFilter = isSuperAdmin ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
   const today = new Date().toISOString().slice(0, 10);
 
-  const [settings, stories, posts, challengeResult] = await Promise.all([
+  const [settings, stories, posts, birthdayResult, challengeResult] = await Promise.all([
     getSiteSettings(),
 
     db.execute(`
@@ -59,6 +59,16 @@ export default async function HomePage() {
     `, [session.id]),
 
     db.execute(
+      `SELECT u.id, u.first_name, u.username, u.profile_picture
+       FROM users u
+       JOIN follows f ON f.following_id = u.id
+       WHERE f.follower_id = ?
+         AND MONTH(u.birthday) = MONTH(CURDATE())
+         AND DAY(u.birthday) = DAY(CURDATE())`,
+      [session.id]
+    ),
+
+    db.execute(
       `SELECT dc.id, dc.prompt, dc.emoji, dc.active_date,
          (SELECT COUNT(*) FROM challenge_responses cr WHERE cr.challenge_id = dc.id) as response_count,
          (SELECT id FROM challenge_responses cr WHERE cr.challenge_id = dc.id AND cr.user_id = ?) as my_response_id
@@ -89,6 +99,8 @@ export default async function HomePage() {
       : [{ user_id: session.id, username: session.username, first_name: session.first_name, profile_picture: session.profile_picture || null, stories: [], has_unseen: false }]),
     ...Array.from(storyUserMap.values()).filter(g => g.user_id !== session.id),
   ];
+
+  const birthdayUsers = (birthdayResult as any[][])[0] as any[];
 
   const challengeRows = (challengeResult as any[][])[0] as any[];
   const todayChallenge = challengeRows[0] ?? null;
@@ -140,6 +152,16 @@ export default async function HomePage() {
 
       <StoriesBar initialStories={storyGroups} currentUserId={session.id} />
       <RightNowBanner />
+      {birthdayUsers.map((u: any) => (
+        <div key={u.id} className="mb-4 rounded-2xl bg-gradient-to-r from-pink-400 to-yellow-400 px-5 py-4 flex items-center gap-4">
+          <span className="text-4xl">&#127874;</span>
+          <div className="flex-1">
+            <p className="text-white font-black text-lg">Happy Birthday, {u.first_name}!</p>
+            <p className="text-white/80 text-sm">Wish them a happy birthday today!</p>
+          </div>
+          <a href={`/profile/${encodeURIComponent(u.username)}`} className="bg-white text-pink-500 font-bold text-sm px-4 py-2 rounded-full hover:bg-white/90 transition flex-shrink-0">View profile</a>
+        </div>
+      ))}
       <DailyChallenge initial={challengeWithResponses} />
 
       {postRows.length === 0 ? (

@@ -10,7 +10,8 @@ export async function PATCH(request: Request) {
   if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const { first_name, last_name, bio, profile_picture, current_password, new_password, theme, dark_mode } = body;
+  const { first_name, last_name, bio, profile_picture, current_password, new_password, theme, dark_mode,
+          now_playing_song, now_playing_artist, birthday } = body;
 
   if (new_password) {
     const [rows] = await db.execute('SELECT password FROM users WHERE id = ?', [session.id]) as any[];
@@ -39,8 +40,13 @@ export async function PATCH(request: Request) {
   }
 
   await db.execute(
-    'UPDATE users SET first_name = ?, last_name = ?, bio = ?, profile_picture = ? WHERE id = ?',
-    [first_name, last_name, bio || null, profile_picture || null, session.id]
+    `UPDATE users SET first_name = ?, last_name = ?, bio = ?, profile_picture = ?,
+      now_playing_song = ?, now_playing_artist = ?, birthday = ? WHERE id = ?`,
+    [
+      first_name, last_name, bio || null, profile_picture || null,
+      now_playing_song?.trim() || null, now_playing_artist?.trim() || null,
+      birthday || null, session.id,
+    ]
   );
 
   return NextResponse.json({ message: 'Profile updated' });
