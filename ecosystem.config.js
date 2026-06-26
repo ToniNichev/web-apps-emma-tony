@@ -11,5 +11,14 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 3006,
     },
+  }, {
+    name: 'right-now-scheduler',
+    script: 'schedule_right_now.mjs',
+    cwd: '/Users/toninichev/Applications/emmas-space',
+    cron_restart: '0 0 * * *',
+    autorestart: false,
+    watch: false,
+    interpreter: '/opt/homebrew/bin/node',
+    env: { NODE_ENV: 'production' },
   }],
 };

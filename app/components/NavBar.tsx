@@ -101,7 +101,7 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
                   <p className="text-xs text-gray-400">@{user.username}</p>
                 </div>
                 <Link
-                  href={`/profile/${user.username}`}
+                  href={`/profile/${encodeURIComponent(user.username)}`}
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
                 >

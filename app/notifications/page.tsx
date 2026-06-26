@@ -18,16 +18,17 @@ function timeAgo(dateStr: string) {
 
 function notifText(n: any) {
   switch (n.type) {
-    case 'like': return 'liked your post';
+    case 'like': return 'reacted to your post';
     case 'comment': return `commented: "${n.message_preview}"`;
     case 'follow': return 'started following you';
     case 'message': return `sent you a message: "${n.message_preview}"`;
+    case 'poll_vote': return 'voted on your poll';
   }
 }
 
 function notifLink(n: any) {
   if (n.type === 'message') return '/messages';
-  if (n.type === 'follow') return `/profile/${n.actor_username}`;
+  if (n.type === 'follow') return `/profile/${encodeURIComponent(n.actor_username)}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
 }
@@ -83,7 +84,7 @@ export default async function NotificationsPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
                 </div>
                 <span className="text-lg">
-                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : '📩'}
+                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : '📩'}
                 </span>
               </Link>
             ))

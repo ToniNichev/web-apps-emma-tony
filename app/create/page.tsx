@@ -3,17 +3,28 @@ import { useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { BACKGROUNDS, getBg } from '@/app/lib/backgrounds';
 
-type Mode = 'post' | 'story';
+type Mode = 'post' | 'poll' | 'story';
 
 export default function CreatePage() {
   const router = useRouter();
   const params = useSearchParams();
   const [mode, setMode] = useState<Mode>(params.get('tab') === 'story' ? 'story' : 'post');
+  const rightNowId = params.get('rightNow');
 
   // Post state
   const [content, setContent] = useState('');
   const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
   const [selectedBg, setSelectedBg] = useState('none');
+
+  // Poll state
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+
+  // Poll image state
+  const [pollMedia, setPollMedia] = useState<{ url: string; type: 'image' }[]>([]);
+  const [pollImgLoading, setPollImgLoading] = useState(false);
+  const [pollImgProgress, setPollImgProgress] = useState(0);
+  const [pollImgError, setPollImgError] = useState('');
 
   // Story state
   const [storyFile, setStoryFile] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
@@ -67,13 +78,74 @@ export default function CreatePage() {
     const res = await fetch('/api/posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, media, background: selectedBg }),
+      body: JSON.stringify({ content, media, background: selectedBg, right_now_session_id: rightNowId ? Number(rightNowId) : undefined }),
     });
     if (res.ok) {
       router.push('/');
       router.refresh();
     } else {
       setError('Failed to post');
+      setSubmitting(false);
+    }
+  }
+
+  async function generatePollImage() {
+    if (!pollQuestion.trim()) { setPollImgError('Write a question first!'); return; }
+    setPollImgLoading(true);
+    setPollImgProgress(0);
+    setPollImgError('');
+    setPollMedia([]);
+    try {
+      const res = await fetch('/api/ai/image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: pollQuestion }),
+      });
+      if (!res.ok || !res.body) { setPollImgError('Image generator unavailable'); setPollImgLoading(false); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.progress !== undefined) setPollImgProgress(Math.round(chunk.progress * 100));
+            if (chunk.url) { setPollMedia([{ url: chunk.url, type: 'image' }]); setPollImgLoading(false); }
+            if (chunk.error) { setPollImgError(chunk.error); setPollImgLoading(false); }
+          } catch {}
+        }
+      }
+    } catch { setPollImgError('Something went wrong'); setPollImgLoading(false); }
+  }
+
+  async function handleSubmitPoll(e: React.FormEvent) {
+    e.preventDefault();
+    const options = pollOptions.map(o => o.trim()).filter(Boolean);
+    if (!pollQuestion.trim()) {
+      setError('Add a question for your poll');
+      return;
+    }
+    if (options.length < 2) {
+      setError('Add at least 2 options');
+      return;
+    }
+    setSubmitting(true);
+    const res = await fetch('/api/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: pollQuestion, poll: { options }, media: pollMedia }),
+    });
+    if (res.ok) {
+      router.push('/');
+      router.refresh();
+    } else {
+      setError('Failed to create poll');
       setSubmitting(false);
     }
   }
@@ -103,7 +175,7 @@ export default function CreatePage() {
       <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <a href="/" className="text-gray-400 hover:text-gray-600 transition text-sm">← Back</a>
-          <h1 className="font-bold text-gray-800">{mode === 'post' ? 'New Post' : 'New Story'}</h1>
+          <h1 className="font-bold text-gray-800">{mode === 'post' ? 'New Post' : mode === 'poll' ? 'New Poll' : 'New Story'}</h1>
           <div className="w-10" />
         </div>
       </nav>
@@ -118,6 +190,12 @@ export default function CreatePage() {
             Post
           </button>
           <button
+            onClick={() => { setMode('poll'); setError(''); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === 'poll' ? 'bg-white shadow text-pink-500' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Poll
+          </button>
+          <button
             onClick={() => { setMode('story'); setError(''); }}
             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === 'story' ? 'bg-white shadow text-pink-500' : 'text-gray-500 hover:text-gray-700'}`}
           >
@@ -127,11 +205,22 @@ export default function CreatePage() {
         <p className="text-xs text-gray-400 text-center mb-4">
           {mode === 'post'
             ? 'A post stays on your profile for everyone to see and comment on.'
+            : mode === 'poll'
+            ? 'Ask a question and let people vote — like "Which outfit is cuter? 👗"'
             : 'A story is a photo or video shown at the top of the feed — can disappear after 24 hours or stay forever.'}
         </p>
 
         {mode === 'post' ? (
           <form onSubmit={handleSubmitPost}>
+            {rightNowId && (
+              <div className="mb-3 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 px-5 py-3 flex items-center gap-3 text-white">
+                <span className="text-2xl animate-bounce">📍</span>
+                <div>
+                  <p className="font-black text-sm">RIGHT NOW!</p>
+                  <p className="text-xs opacity-80">Share what you're doing this exact moment ⚡</p>
+                </div>
+              </div>
+            )}
             <div className="card overflow-hidden">
               {/* Text area — fills the card edge-to-edge when a background is selected */}
               {hasBg ? (
@@ -239,6 +328,94 @@ export default function CreatePage() {
                     {submitting ? 'Posting…' : 'Share ✨'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </form>
+        ) : mode === 'poll' ? (
+          <form onSubmit={handleSubmitPoll}>
+            <div className="card p-6 space-y-4">
+              <textarea
+                value={pollQuestion}
+                onChange={e => setPollQuestion(e.target.value)}
+                placeholder="Ask a question… 🗳️"
+                rows={2}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-from)] transition"
+              />
+
+              <div className="space-y-2">
+                {pollOptions.map((opt, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      value={opt}
+                      onChange={e => setPollOptions(opts => opts.map((o, j) => j === i ? e.target.value : o))}
+                      placeholder={`Option ${i + 1}`}
+                      maxLength={100}
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setPollOptions(opts => opts.filter((_, j) => j !== i))}
+                        className="text-gray-300 hover:text-red-400 transition px-1"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* AI image generator */}
+              <div className="border border-gray-100 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500">✨ AI header image <span className="font-normal text-gray-400">(optional)</span></p>
+                  {pollMedia.length > 0 && (
+                    <button type="button" onClick={() => { setPollMedia([]); setPollImgProgress(0); }} className="text-xs text-red-400 hover:text-red-600">Remove</button>
+                  )}
+                </div>
+
+                {pollMedia.length > 0 ? (
+                  <img src={pollMedia[0].url} alt="" className="w-full rounded-xl max-h-48 object-cover" />
+                ) : pollImgLoading ? (
+                  <div className="space-y-1.5">
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full brand-gradient rounded-full transition-all duration-300" style={{ width: `${pollImgProgress}%` }} />
+                    </div>
+                    <p className="text-xs text-center text-gray-400">Luna is painting… {pollImgProgress}%</p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={generatePollImage}
+                    disabled={pollImgLoading}
+                    className="w-full py-2 rounded-xl border border-dashed border-gray-200 text-sm text-gray-400 hover:border-pink-300 hover:text-pink-400 transition"
+                  >
+                    🎨 Generate image from question
+                  </button>
+                )}
+                {pollImgError && <p className="text-xs text-red-400">{pollImgError}</p>}
+              </div>
+
+              {pollOptions.length < 4 && (
+                <button
+                  type="button"
+                  onClick={() => setPollOptions(opts => [...opts, ''])}
+                  className="text-sm text-pink-500 font-semibold hover:text-pink-600"
+                >
+                  + Add option
+                </button>
+              )}
+
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+
+              <div className="flex justify-end border-t border-gray-100 pt-4">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="brand-gradient text-white font-semibold px-6 py-2.5 rounded-full text-sm hover:opacity-90 transition disabled:opacity-60"
+                >
+                  {submitting ? 'Posting…' : 'Share Poll ✨'}
+                </button>
               </div>
             </div>
           </form>

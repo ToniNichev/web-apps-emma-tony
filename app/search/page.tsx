@@ -45,7 +45,7 @@ export default function SearchPage() {
 
         <div className="space-y-3">
           {results.map(user => (
-            <Link key={user.id} href={`/profile/${user.username}`} className="card p-4 flex items-center gap-3 hover:shadow-md transition block">
+            <Link key={user.id} href={`/profile/${encodeURIComponent(user.username)}`} className="card p-4 flex items-center gap-3 hover:shadow-md transition block">
               <div className="w-12 h-12 rounded-full brand-gradient flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
                 {user.profile_picture
                   ? <img src={user.profile_picture} alt="" className="w-full h-full object-cover" />

@@ -3,7 +3,15 @@ import { jwtVerify } from 'jose';
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
-const publicPaths = ['/login', '/signup', '/api/auth/login', '/api/auth/signup'];
+const publicPaths = [
+  '/login',
+  '/signup',
+  '/api/auth/login',
+  '/api/auth/signup',
+  '/forgot-password',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+];
 
 export async function proxy(request: import('next/server').NextRequest) {
   const { pathname } = request.nextUrl;

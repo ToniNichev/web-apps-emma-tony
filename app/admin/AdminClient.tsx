@@ -10,12 +10,24 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'luna' | 'banner' | 'users' | 'recap';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap';
+
+type Invite = {
+  id: number;
+  code: string;
+  created_at: string;
+  used_at: string | null;
+  created_by_username: string;
+  used_by_username: string | null;
+};
 
 export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [tab, setTab] = useState<Tab>('site');
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<any[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [inviteGenerating, setInviteGenerating] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -30,11 +42,37 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     fetch('/api/admin/settings').then(r => r.json()).then(setSettings);
     fetch('/api/admin/users').then(r => r.json()).then(u => {
       setUsers(u);
-      // default recap to first non-super-admin user (Emma)
       const first = u.find((x: any) => x.is_admin < 2);
       if (first) setRecapUser(String(first.id));
     });
   }, []);
+
+  useEffect(() => {
+    if (tab === 'invites') {
+      fetch('/api/admin/invites').then(r => r.json()).then(setInvites);
+    }
+  }, [tab]);
+
+  async function generateInvite() {
+    setInviteGenerating(true);
+    const res = await fetch('/api/admin/invites', { method: 'POST' });
+    if (res.ok) {
+      const { code } = await res.json();
+      setInvites(prev => [{ id: Date.now(), code, created_at: new Date().toISOString(), used_at: null, created_by_username: 'you', used_by_username: null }, ...prev]);
+    }
+    setInviteGenerating(false);
+  }
+
+  async function deleteInvite(id: number) {
+    await fetch('/api/admin/invites', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    setInvites(prev => prev.filter(i => i.id !== id));
+  }
+
+  function copyCode(code: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  }
 
   async function loadRecap() {
     if (!recapUser) return;
@@ -102,6 +140,15 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const bannerBg = settings.banner_bg || 'none';
   const bgOpt = getBg(bannerBg);
 
+  const tabs: { id: Tab; label: string; emoji: string }[] = [
+    { id: 'site',    label: 'Site',    emoji: '🎨' },
+    { id: 'luna',    label: 'Luna',    emoji: '🌙' },
+    { id: 'banner',  label: 'Banner',  emoji: '📢' },
+    { id: 'users',   label: 'Users',   emoji: '👥' },
+    { id: 'invites', label: 'Invites', emoji: '🔑' },
+    { id: 'recap',   label: 'Recap',   emoji: '📊' },
+  ];
+
   return (
     <>
       <div className="mb-5">
@@ -110,20 +157,20 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl">
-        {(['site', 'luna', 'banner', 'users', 'recap'] as Tab[]).map(t => (
+      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+        {tabs.map(t => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition flex flex-col items-center gap-0.5 ${tab === t ? 'bg-white shadow brand-text' : 'text-gray-500 hover:text-gray-700'}`}
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition flex flex-col items-center gap-0.5 min-w-[52px] ${tab === t.id ? 'bg-white shadow brand-text' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            <span className="text-base">{t === 'site' ? '🎨' : t === 'luna' ? '🌙' : t === 'banner' ? '📢' : t === 'users' ? '👥' : '📊'}</span>
-            <span>{t === 'site' ? 'Site' : t === 'luna' ? 'Luna' : t === 'banner' ? 'Banner' : t === 'users' ? 'Users' : 'Recap'}</span>
+            <span className="text-base">{t.emoji}</span>
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
 
-      {/* ── Customize tab ── */}
+      {/* ── Site tab ── */}
       {tab === 'site' && (
         <div className="card p-6 space-y-5">
           <div>
@@ -246,7 +293,6 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
             <input ref={bannerFileRef} type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadBannerImage(e.target.files[0])} />
           </div>
 
-          {/* Preview */}
           {(settings.banner_text || settings.banner_image) && (
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-2">Preview</p>
@@ -350,11 +396,68 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
         </div>
       )}
 
-      {/* ── Messages tab ── */}
+      {/* ── Invites tab ── */}
+      {tab === 'invites' && (
+        <div className="space-y-4">
+          <div className="card p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="font-semibold text-sm text-gray-700">Invite codes</p>
+              <p className="text-xs text-gray-400 mt-0.5">Each code can only be used once to create an account.</p>
+            </div>
+            <button
+              onClick={generateInvite}
+              disabled={inviteGenerating}
+              className="brand-gradient text-white font-semibold px-4 py-2 rounded-full text-sm hover:opacity-90 transition disabled:opacity-60 flex-shrink-0"
+            >
+              {inviteGenerating ? 'Generating…' : '+ New code'}
+            </button>
+          </div>
+
+          <div className="card overflow-hidden">
+            {invites.length === 0 && (
+              <p className="px-4 py-8 text-center text-sm text-gray-400">No invite codes yet. Generate one above.</p>
+            )}
+            {invites.map((inv, i) => (
+              <div key={inv.id} className={`flex items-center gap-3 px-4 py-3 ${i < invites.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-mono text-sm font-semibold ${inv.used_at ? 'text-gray-300 line-through' : 'text-gray-800'}`}>
+                    {inv.code}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {inv.used_at
+                      ? `Used by @${inv.used_by_username} · ${timeAgo(inv.used_at)}`
+                      : `Created ${timeAgo(inv.created_at)}`}
+                  </p>
+                </div>
+                {!inv.used_at && (
+                  <>
+                    <button
+                      onClick={() => copyCode(inv.code)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:border-pink-300 hover:text-pink-500 transition flex-shrink-0"
+                    >
+                      {copiedCode === inv.code ? '✓ Copied!' : 'Copy'}
+                    </button>
+                    <button
+                      onClick={() => deleteInvite(inv.id)}
+                      className="text-gray-300 hover:text-red-400 transition text-lg flex-shrink-0"
+                      title="Delete invite"
+                    >
+                      🗑
+                    </button>
+                  </>
+                )}
+                {inv.used_at && (
+                  <span className="text-xs text-gray-300 flex-shrink-0">Used</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Recap tab ── */}
       {tab === 'recap' && (
         <div className="space-y-4">
-          {/* Controls */}
           <div className="card p-4 flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-36">
               <label className="block text-xs font-semibold text-gray-500 mb-1">User</label>
@@ -391,13 +494,11 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
 
           {recap && (
             <>
-              {/* Stats */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                  { label: 'Posts',          value: recap.posts.length,    emoji: '📝' },
-                  { label: 'Stories',        value: recap.stories.length,  emoji: '📸' },
-
-                  { label: 'Comments made',  value: recap.commentsMade,    emoji: '🗨️' },
+                  { label: 'Posts',         value: recap.posts.length,   emoji: '📝' },
+                  { label: 'Stories',       value: recap.stories.length, emoji: '📸' },
+                  { label: 'Comments made', value: recap.commentsMade,   emoji: '🗨️' },
                 ].map(s => (
                   <div key={s.label} className="card p-4 text-center">
                     <p className="text-2xl mb-1">{s.emoji}</p>
@@ -407,7 +508,6 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                 ))}
               </div>
 
-              {/* Posts */}
               {recap.posts.length > 0 && (
                 <div className="card overflow-hidden">
                   <p className="px-4 pt-4 pb-2 font-semibold text-sm text-gray-600">Posts ({recap.posts.length})</p>
@@ -423,12 +523,8 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                               : <img src={mediaUrls[0]} alt="" className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
-                            {p.content && (
-                              <p className="text-sm text-gray-700 line-clamp-2">{p.content}</p>
-                            )}
-                            {!p.content && mediaUrls.length > 0 && (
-                              <p className="text-sm text-gray-400 italic">Photo/video post</p>
-                            )}
+                            {p.content && <p className="text-sm text-gray-700 line-clamp-2">{p.content}</p>}
+                            {!p.content && mediaUrls.length > 0 && <p className="text-sm text-gray-400 italic">Photo/video post</p>}
                             <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
                               <span>❤️ {p.like_count}</span>
                               <span>💬 {p.comment_count}</span>
@@ -443,7 +539,6 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                 </div>
               )}
 
-              {/* Stories */}
               {recap.stories.length > 0 && (
                 <div className="card overflow-hidden">
                   <p className="px-4 pt-4 pb-3 font-semibold text-sm text-gray-600">Stories ({recap.stories.length})</p>
@@ -473,7 +568,6 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
           )}
         </div>
       )}
-
     </>
   );
 }

@@ -3,11 +3,75 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; onClose: () => void }) {
+  const [email, setEmail] = useState(initialEmail);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    setMessage(data.message);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center px-4 z-50">
+      <div className="card p-8 w-full max-w-sm">
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Forgot Password?</h3>
+        {message ? (
+          <>
+            <p className="text-gray-500 text-sm mb-6">{message}</p>
+            <button onClick={onClose} className="w-full brand-gradient text-white font-semibold py-3 rounded-xl">
+              Close
+            </button>
+          </>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <p className="text-gray-500 text-sm">Enter your email and we'll send you a reset link.</p>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
+              placeholder="you@example.com"
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 brand-gradient text-white font-semibold py-3 rounded-xl transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {loading ? 'Sending…' : 'Send link'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +116,16 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-xs text-pink-500 font-semibold hover:text-pink-600"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <input
                 type="password"
                 required
@@ -84,6 +157,13 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      {showForgotPassword && (
+        <ForgotPasswordModal
+          initialEmail={form.email}
+          onClose={() => setShowForgotPassword(false)}
+        />
+      )}
     </div>
   );
 }

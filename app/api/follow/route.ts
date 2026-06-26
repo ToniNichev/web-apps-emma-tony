@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
+import { checkBadges } from '@/app/lib/badges';
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -26,5 +27,7 @@ export async function POST(request: Request) {
     [following_id, session.id]
   );
 
+  checkBadges(session.id).catch(() => {});
+  checkBadges(following_id).catch(() => {});
   return NextResponse.json({ following: true });
 }

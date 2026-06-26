@@ -15,7 +15,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
   const [rows] = await db.execute(`
     SELECT p.*, u.username, u.first_name, u.last_name, u.profile_picture,
       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) as like_count,
+      (SELECT emoji FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) as my_reaction,
       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
+      (SELECT id FROM polls pl WHERE pl.post_id = p.id) as poll_id,
       GROUP_CONCAT(DISTINCT m.url ORDER BY m.order_index SEPARATOR '||') as media_urls,
       GROUP_CONCAT(DISTINCT m.type ORDER BY m.order_index SEPARATOR '||') as media_types
     FROM posts p
@@ -23,7 +25,7 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
     LEFT JOIN media m ON m.post_id = p.id
     WHERE p.id = ?
     GROUP BY p.id
-  `, [id]) as any[];
+  `, [session?.id ?? 0, id]) as any[];
 
   const post = (rows as any[])[0];
   if (!post) notFound();

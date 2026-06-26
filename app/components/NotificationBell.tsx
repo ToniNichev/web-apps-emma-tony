@@ -5,7 +5,7 @@ import { useAppSocket } from './SocketProvider';
 
 interface Notification {
   id: number;
-  type: 'like' | 'comment' | 'follow' | 'message';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote';
   actor_first_name: string;
   actor_username: string;
   actor_profile_picture: string | null;
@@ -27,10 +27,11 @@ function timeAgo(dateStr: string) {
 
 function notifText(n: Notification) {
   switch (n.type) {
-    case 'like': return 'liked your post';
+    case 'like': return 'reacted to your post';
     case 'comment': return `commented: "${n.message_preview}"`;
     case 'follow': return 'started following you';
     case 'message': return `sent you a message: "${n.message_preview}"`;
+    case 'poll_vote': return 'voted on your poll';
   }
 }
 

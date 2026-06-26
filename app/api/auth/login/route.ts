@@ -3,8 +3,14 @@ import { serialize } from 'cookie';
 import bcrypt from 'bcryptjs';
 import db from '@/app/lib/db';
 import { signJWT } from '@/app/lib/auth';
+import { rateLimit, getClientIp } from '@/app/lib/rate-limit';
+import { logActivity } from '@/app/lib/activity';
 
 export async function POST(request: Request) {
+  if (!rateLimit(getClientIp(request), 10, 15 * 60 * 1000)) {
+    return NextResponse.json({ message: 'Too many attempts. Please wait a while.' }, { status: 429 });
+  }
+
   const { email, password } = await request.json();
 
   const [rows] = await db.execute(
@@ -34,6 +40,7 @@ export async function POST(request: Request) {
 
   const cookieOpts = { httpOnly: false, secure: true, sameSite: 'lax' as const, path: '/' };
 
+  logActivity(user.id, 'login', undefined, getClientIp(request));
   const { password: _, ...safeUser } = user;
   const response = NextResponse.json({ user: safeUser }, { status: 200 });
   response.headers.append('Set-Cookie', serialize('auth', token, { ...cookieOpts, httpOnly: true, maxAge: 60 * 60 * 24 * 30 }));

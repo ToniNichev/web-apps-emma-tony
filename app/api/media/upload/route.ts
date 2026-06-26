@@ -26,7 +26,9 @@ export async function POST(request: Request) {
   const uploadBase = path.join(process.cwd(), 'public', 'uploads');
 
   if (isVideo) {
-    const ext = file.name.split('.').pop() || 'mp4';
+    const rawExt = (file.name.split('.').pop() || '').toLowerCase();
+  const SAFE_VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi']);
+  const ext = SAFE_VIDEO_EXTS.has(rawExt) ? rawExt : 'mp4';
     const filename = `${uuidv4()}.${ext}`;
     const videoDir = path.join(uploadBase, 'videos');
     await mkdir(videoDir, { recursive: true });

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/app/lib/auth';
 import db from '@/app/lib/db';
+import { logActivity } from '@/app/lib/activity';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,5 +66,6 @@ export async function POST(request: Request) {
      permanent ? null : new Date(Date.now() + 24 * 60 * 60 * 1000)]
   ) as any[];
 
+  logActivity(session.id, 'story_created', caption || undefined);
   return NextResponse.json({ id: result.insertId });
 }

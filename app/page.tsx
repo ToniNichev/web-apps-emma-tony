@@ -6,6 +6,8 @@ import { getBg } from '@/app/lib/backgrounds';
 import db from '@/app/lib/db';
 import Feed from '@/app/components/Feed';
 import StoriesBar from '@/app/components/StoriesBar';
+import { POSTS_PAGE_SIZE } from '@/app/lib/constants';
+import RightNowBanner from '@/app/components/RightNowBanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +41,9 @@ export default async function HomePage() {
     db.execute(`
       SELECT p.*, u.username, u.first_name, u.last_name, u.profile_picture,
         (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) as like_count,
+        (SELECT emoji FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) as my_reaction,
         (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
+        (SELECT id FROM polls pl WHERE pl.post_id = p.id) as poll_id,
         GROUP_CONCAT(DISTINCT m.url ORDER BY m.order_index SEPARATOR '||') as media_urls,
         GROUP_CONCAT(DISTINCT m.type ORDER BY m.order_index SEPARATOR '||') as media_types,
         GROUP_CONCAT(DISTINCT m.thumbnail_url ORDER BY m.order_index SEPARATOR '||') as media_thumbnails
@@ -48,9 +52,9 @@ export default async function HomePage() {
       LEFT JOIN media m ON m.post_id = p.id
       WHERE 1=1 ${hiddenFilter}
       GROUP BY p.id
-      ORDER BY p.created_at DESC
-      LIMIT 50
-    `),
+      ORDER BY p.id DESC
+      LIMIT ${POSTS_PAGE_SIZE}
+    `, [session.id]),
   ]);
 
   const storyRows = (stories as any[][])[0] as any[];
@@ -108,6 +112,7 @@ export default async function HomePage() {
       )}
 
       <StoriesBar initialStories={storyGroups} currentUserId={session.id} />
+      <RightNowBanner />
 
       {postRows.length === 0 ? (
         <div className="card p-12 text-center">
@@ -123,6 +128,7 @@ export default async function HomePage() {
           currentUserId={session.id}
           isAdmin={session.is_admin >= 1}
           isSuperAdmin={isSuperAdmin}
+          hasMore={postRows.length === POSTS_PAGE_SIZE}
         />
       )}
     </main>

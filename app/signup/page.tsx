@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', email: '', password: '' });
+  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', email: '', password: '', invite_code: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -86,12 +86,24 @@ export default function SignupPage() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition"
-                placeholder="Min 6 characters"
+                placeholder="Min 8 characters"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Invite code</label>
+              <input
+                type="text"
+                required
+                value={form.invite_code}
+                onChange={e => setForm(f => ({ ...f, invite_code: e.target.value.trim() }))}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 focus:border-transparent transition font-mono"
+                placeholder="Paste your invite code here"
+              />
+              <p className="text-xs text-gray-400 mt-1">Emma's Space is invite-only. Ask an admin for a code.</p>
             </div>
 
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}

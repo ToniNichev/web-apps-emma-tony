@@ -5,6 +5,8 @@ import db from '@/app/lib/db';
 import PostCard from '@/app/components/PostCard';
 import FollowButton from '@/app/components/FollowButton';
 import MessageButton from '@/app/components/MessageButton';
+import { getPostingStreak } from '@/app/lib/streaks';
+import { getUserBadges } from '@/app/lib/badges';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +16,8 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   const token = cookieStore.get("auth")?.value || "";
   if (!session) redirect('/login');
 
-  const { username } = await params;
+  const { username: rawUsername } = await params;
+  const username = decodeURIComponent(rawUsername);
 
   const [users] = await db.execute(
     'SELECT id, username, first_name, last_name, bio, profile_picture, cover_photo, created_at FROM users WHERE username = ?',
@@ -30,7 +33,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   const [posts] = await db.execute(`
     SELECT p.*, u.username, u.first_name, u.last_name, u.profile_picture,
       (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) as like_count,
+      (SELECT emoji FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) as my_reaction,
       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
+      (SELECT id FROM polls pl WHERE pl.post_id = p.id) as poll_id,
       GROUP_CONCAT(DISTINCT m.url ORDER BY m.order_index SEPARATOR '||') as media_urls,
       GROUP_CONCAT(DISTINCT m.type ORDER BY m.order_index SEPARATOR '||') as media_types,
       GROUP_CONCAT(DISTINCT m.thumbnail_url ORDER BY m.order_index SEPARATOR '||') as media_thumbnails
@@ -40,7 +45,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     WHERE p.user_id = ? ${hiddenFilter}
     GROUP BY p.id
     ORDER BY p.created_at DESC
-  `, [user.id]) as any[];
+  `, [session.id, user.id]) as any[];
 
   const [followerRows] = await db.execute('SELECT COUNT(*) as count FROM follows WHERE following_id = ?', [user.id]) as any[];
   const [followingRows] = await db.execute('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?', [user.id]) as any[];
@@ -53,6 +58,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   const followingCount = (followingRows as any[])[0].count;
   const isFollowing = (isFollowingRows as any[]).length > 0;
   const isOwn = session.id === user.id;
+  const [streak, badges] = await Promise.all([getPostingStreak(user.id), getUserBadges(user.id)]);
 
   return (
     <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
@@ -70,7 +76,14 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
 <FollowButton userId={user.id} initialFollowing={isFollowing} /></>
             )}
           </div>
-          <h1 className="text-xl font-bold">{user.first_name} {user.last_name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">{user.first_name} {user.last_name}</h1>
+            {streak > 0 && (
+              <span className="inline-flex items-center gap-1 bg-orange-50 text-orange-500 text-xs font-bold px-2 py-1 rounded-full">
+                🔥 {streak} day{streak === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
           <p className="text-gray-400 text-sm">@{user.username}</p>
           {user.bio && <p className="text-gray-600 text-sm mt-2">{user.bio}</p>}
           <div className="flex gap-6 mt-4 text-sm">
@@ -78,6 +91,16 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
             <div><span className="font-bold">{followerCount}</span> <span className="text-gray-400">followers</span></div>
             <div><span className="font-bold">{followingCount}</span> <span className="text-gray-400">following</span></div>
           </div>
+          {badges.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {badges.map(b => (
+                <span key={b.id} title={b.description}
+                  className="inline-flex items-center gap-1 bg-gray-50 border border-gray-100 text-xs px-2.5 py-1 rounded-full text-gray-600 cursor-default select-none">
+                  {b.emoji} {b.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

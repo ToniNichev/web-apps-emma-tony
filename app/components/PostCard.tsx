@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import PostContent from './UrlEmbed';
+import GifPicker from './GifPicker';
 import { getBg } from '@/app/lib/backgrounds';
 import Lightbox from './Lightbox';
 
@@ -15,13 +16,83 @@ export interface Post {
   last_name: string;
   profile_picture: string | null;
   like_count: number;
+  my_reaction?: string | null;
   comment_count: number;
+  poll_id?: number | null;
   media_urls: string | null;
   media_types: string | null;
   media_thumbnails: string | null;
   background: string | null;
   created_at: string;
   hidden?: number;
+  right_now_session_id?: number | null;
+  right_now_seconds_late?: number | null;
+}
+
+const REACTIONS = ['❤️', '🔥', '😍', '😂', '😮', '✨', '👏', '😢', '💯', '🎉', '😎', '🤩'];
+
+interface PollOption { id: number; option_text: string; vote_count: number }
+
+function PollBlock({ postId }: { postId: number }) {
+  const [options, setOptions] = useState<PollOption[] | null>(null);
+  const [myVote, setMyVote] = useState<number | null>(null);
+  const [voting, setVoting] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/posts/${postId}/poll`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) { setOptions(data.options); setMyVote(data.myVote); }
+      });
+  }, [postId]);
+
+  async function vote(optionId: number) {
+    if (voting || optionId === myVote) return;
+    setVoting(true);
+    const res = await fetch(`/api/posts/${postId}/poll/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionId }),
+    });
+    const data = await res.json();
+    setOptions(data.options);
+    setMyVote(data.myVote);
+    setVoting(false);
+  }
+
+  if (!options) return null;
+  const total = options.reduce((s, o) => s + o.vote_count, 0);
+
+  return (
+    <div className="px-4 pb-2 space-y-2">
+      {options.map(o => {
+        const pct = total > 0 ? Math.round((o.vote_count / total) * 100) : 0;
+        const isMine = myVote === o.id;
+        return (
+          <button
+            key={o.id}
+            onClick={() => vote(o.id)}
+            disabled={voting}
+            className={`relative w-full text-left rounded-xl border overflow-hidden transition ${isMine ? 'border-pink-400' : 'border-gray-200 hover:border-pink-200'}`}
+          >
+            {myVote !== null && (
+              <div
+                className={`absolute inset-y-0 left-0 ${isMine ? 'bg-pink-100' : 'bg-gray-50'}`}
+                style={{ width: `${pct}%` }}
+              />
+            )}
+            <div className="relative flex items-center justify-between px-3 py-2 text-sm">
+              <span className={`font-medium ${isMine ? 'text-pink-600' : 'text-gray-700'}`}>
+                {isMine && '✓ '}{o.option_text}
+              </span>
+              {myVote !== null && <span className="text-xs text-gray-400">{pct}%</span>}
+            </div>
+          </button>
+        );
+      })}
+      <p className="text-xs text-gray-400">{total} vote{total === 1 ? '' : 's'}</p>
+    </div>
+  );
 }
 
 function timeAgo(dateStr: string) {
@@ -44,18 +115,23 @@ export default function PostCard({
   onImageClick?: (url: string) => void;
 }) {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
+  const [myReaction, setMyReaction] = useState<string | null>(post.my_reaction || null);
   const [likeCount, setLikeCount] = useState(post.like_count);
+  const [reactionBreakdown, setReactionBreakdown] = useState<{ emoji: string; count: number }[]>([]);
+  const [showReactions, setShowReactions] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [pendingGif, setPendingGif] = useState<string | null>(null);
   const [deleted, setDeleted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [hidden, setHidden] = useState(Boolean(post.hidden));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const reactionsRef = useRef<HTMLDivElement>(null);
 
   const canDelete = post.user_id === currentUserId || isAdmin;
   const mediaUrls   = post.media_urls?.split('||').filter(Boolean)        || [];
@@ -66,16 +142,45 @@ export default function PostCard({
   useEffect(() => {
     function handle(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+      if (reactionsRef.current && !reactionsRef.current.contains(e.target as Node)) setShowReactions(false);
     }
-    if (showMenu) document.addEventListener('mousedown', handle);
+    if (showMenu || showReactions) document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
-  }, [showMenu]);
+  }, [showMenu, showReactions]);
 
-  async function toggleLike() {
-    const res = await fetch(`/api/posts/${post.id}/like`, { method: 'POST' });
+  useEffect(() => {
+    if (post.like_count > 0) {
+      fetch(`/api/posts/${post.id}/reactions`)
+        .then(res => res.json())
+        .then(setReactionBreakdown);
+    }
+  }, [post.id, post.like_count]);
+
+  async function react(emoji: string) {
+    setShowReactions(false);
+    const prevEmoji = myReaction;
+    const res = await fetch(`/api/posts/${post.id}/like`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji }),
+    });
     const data = await res.json();
-    setLiked(data.liked);
-    setLikeCount(c => data.liked ? c + 1 : c - 1);
+    const nextEmoji = data.reacted ? data.emoji : null;
+    setMyReaction(nextEmoji);
+    setLikeCount(c => {
+      if (nextEmoji && !prevEmoji) return c + 1;
+      if (!nextEmoji && prevEmoji) return c - 1;
+      return c;
+    });
+    setReactionBreakdown(prev => {
+      const counts = new Map(prev.map(r => [r.emoji, r.count]));
+      if (prevEmoji) counts.set(prevEmoji, (counts.get(prevEmoji) || 1) - 1);
+      if (nextEmoji) counts.set(nextEmoji, (counts.get(nextEmoji) || 0) + 1);
+      return Array.from(counts.entries())
+        .filter(([, count]) => count > 0)
+        .map(([emoji, count]) => ({ emoji, count }))
+        .sort((a, b) => b.count - a.count);
+    });
   }
 
   async function loadComments() {
@@ -88,14 +193,15 @@ export default function PostCard({
 
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!commentText.trim() && !pendingGif) return;
     setSubmitting(true);
     await fetch(`/api/posts/${post.id}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: commentText }),
+      body: JSON.stringify({ content: commentText, gif_url: pendingGif }),
     });
     setCommentText('');
+    setPendingGif(null);
     const res = await fetch(`/api/posts/${post.id}/comments`);
     setComments(await res.json());
     setSubmitting(false);
@@ -139,7 +245,7 @@ export default function PostCard({
 
         {/* Header */}
         <div className="flex items-center gap-3 p-4">
-          <Link href={`/profile/${post.username}`}>
+          <Link href={`/profile/${encodeURIComponent(post.username)}`}>
             {post.profile_picture ? (
               <img src={post.profile_picture} alt="" width={40} height={40} loading="lazy" className="w-10 h-10 rounded-full object-cover" />
             ) : (
@@ -149,10 +255,23 @@ export default function PostCard({
             )}
           </Link>
           <div className="flex-1">
-            <Link href={`/profile/${post.username}`} className="font-semibold text-sm hover:text-pink-500 transition">
+            <Link href={`/profile/${encodeURIComponent(post.username)}`} className="font-semibold text-sm hover:text-pink-500 transition">
               {post.first_name} {post.last_name}
             </Link>
             <p className="text-xs text-gray-400">@{post.username} · {timeAgo(post.created_at)}</p>
+            {post.right_now_session_id != null && (() => {
+              const secs = post.right_now_seconds_late ?? 0;
+              const label = secs <= 120
+                ? '⚡ on time!'
+                : secs < 3600
+                ? `${Math.round(secs / 60)} min late`
+                : `${Math.round(secs / 3600)}h late`;
+              return (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-gradient-to-r from-pink-500 to-purple-500 text-white px-2 py-0.5 rounded-full">
+                  📍 Right Now · {label}
+                </span>
+              );
+            })()}
           </div>
 
           {canDelete && (
@@ -222,13 +341,38 @@ export default function PostCard({
           </div>
         )}
 
+        {/* Poll */}
+        {post.poll_id && <PollBlock postId={post.id} />}
+
         {/* Actions */}
         <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-50">
-          <button onClick={toggleLike}
-            className={`flex items-center gap-1.5 text-sm transition ${liked ? 'text-pink-500' : 'text-gray-400 hover:text-pink-400'}`}>
-            <span>{liked ? '❤️' : '🤍'}</span>
-            <span>{likeCount}</span>
-          </button>
+          <div className="relative" ref={reactionsRef}>
+            <button
+              onClick={() => setShowReactions(v => !v)}
+              className={`flex items-center gap-1.5 text-sm transition ${myReaction ? 'text-pink-500' : 'text-gray-400 hover:text-pink-400'}`}>
+              {reactionBreakdown.length > 0 ? (
+                <span className="flex -space-x-1">
+                  {reactionBreakdown.slice(0, 3).map(r => <span key={r.emoji}>{r.emoji}</span>)}
+                </span>
+              ) : (
+                <span>🤍</span>
+              )}
+              <span>{likeCount}</span>
+            </button>
+            {showReactions && (
+              <div className="absolute bottom-10 left-0 grid grid-cols-6 gap-1.5 bg-white shadow-lg border border-gray-100 rounded-2xl p-2 z-20 w-[216px]">
+                {REACTIONS.map(e => (
+                  <button
+                    key={e}
+                    onClick={() => react(e)}
+                    className={`text-lg hover:scale-125 transition ${myReaction === e ? 'scale-125' : ''}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={loadComments}
             className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-purple-400 transition">
             <span>💬</span>
@@ -252,12 +396,29 @@ export default function PostCard({
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 flex-1">
                     <span className="font-semibold text-xs text-gray-700">{c.first_name} </span>
-                    <span className="text-xs text-gray-600">{c.content}</span>
+                    {c.content && <span className="text-xs text-gray-600">{c.content}</span>}
+                    {c.gif_url && <img src={c.gif_url} alt="" className="mt-1 rounded-lg max-h-32 max-w-full" loading="lazy" />}
                   </div>
                 </div>
               ))}
             </div>
-            <form onSubmit={submitComment} className="flex gap-2 mt-3">
+            {pendingGif && (
+              <div className="relative mt-2 inline-block">
+                <img src={pendingGif} alt="" className="rounded-xl max-h-24" />
+                <button onClick={() => setPendingGif(null)} className="absolute -top-1 -right-1 w-5 h-5 bg-gray-700 text-white rounded-full text-xs flex items-center justify-center">×</button>
+              </div>
+            )}
+            <form onSubmit={submitComment} className="relative flex gap-2 mt-3">
+              {showGifPicker && (
+                <GifPicker
+                  onSelect={url => { setPendingGif(url); setShowGifPicker(false); }}
+                  onClose={() => setShowGifPicker(false)}
+                />
+              )}
+              <button type="button" onClick={() => setShowGifPicker(v => !v)}
+                className="text-gray-400 hover:text-pink-400 transition text-sm px-1 flex-shrink-0" title="Add GIF">
+                GIF
+              </button>
               <input value={commentText} onChange={e => setCommentText(e.target.value)}
                 placeholder="Add a comment…"
                 className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-pink-300 transition" />
