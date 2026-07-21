@@ -77,9 +77,19 @@ export default function NotificationBell() {
   }
 
   async function markRead() {
-    const res = await fetch('/api/notifications/read', { method: 'POST' });
+    // Only the top 10 are actually rendered in the dropdown — don't mark the
+    // rest of the fetched batch (or anything beyond it) as read too.
+    const shownIds = notifs.slice(0, 10).map(n => n.id);
+    if (shownIds.length === 0) return;
+
+    const res = await fetch('/api/notifications/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: shownIds }),
+    });
     if (!res.ok) return; // don't show "read" locally if it wasn't actually persisted
-    setNotifs(ns => ns.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
+    const shown = new Set(shownIds);
+    setNotifs(ns => ns.map(n => shown.has(n.id) ? { ...n, read_at: n.read_at || new Date().toISOString() } : n));
   }
 
   useEffect(() => {
