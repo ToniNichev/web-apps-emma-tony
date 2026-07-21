@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit, getClientIp } from '@/app/lib/rate-limit';
 
 const SAFE_CATEGORIES: Record<string, string> = {
   '1':  'Film & Animation',
@@ -132,6 +133,10 @@ When in doubt, default to NO — a missed safe video is a much smaller problem t
 }
 
 export async function GET(request: NextRequest) {
+  if (!rateLimit(getClientIp(request), 30, 60 * 1000)) {
+    return NextResponse.json({ error: 'Too many requests. Please wait a while.' }, { status: 429 });
+  }
+
   const videoId = request.nextUrl.searchParams.get('videoId');
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
     return NextResponse.json({ error: 'Invalid video ID' }, { status: 400 });
