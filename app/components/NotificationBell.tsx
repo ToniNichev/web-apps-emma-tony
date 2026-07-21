@@ -144,7 +144,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 w-80 card shadow-xl z-50 overflow-hidden">
+        <div className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-10 sm:w-80 card shadow-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <span className="font-bold text-sm">Notifications</span>
             <Link href="/notifications" className="text-xs text-pink-500 hover:text-pink-600" onClick={() => setOpen(false)}>
