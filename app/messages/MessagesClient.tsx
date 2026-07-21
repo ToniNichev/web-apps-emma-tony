@@ -328,16 +328,24 @@ export default function MessagesClient({
     const userMsg: AIMessage = { role: 'user', content };
     setLunaMessages(ms => [...ms, userMsg, { role: 'assistant', content: '', pending: 'text' }]);
     setLunaStreaming(true);
+    const failMsg = "Hmm, I couldn't hear that — try sending it again? 🌙";
+    let accumulated = '';
     try {
+      // Ollama can get tied up if a painting is generating at the same time —
+      // time out instead of leaving the bubble stuck on "thinking" forever.
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: content }),
+        signal: AbortSignal.timeout(45_000),
       });
-      if (!res.ok || !res.body) { setLunaStreaming(false); return; }
+      if (!res.ok || !res.body) {
+        setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: failMsg }]);
+        setLunaStreaming(false);
+        return;
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -352,7 +360,16 @@ export default function MessagesClient({
           } catch {}
         }
       }
-    } catch {}
+      // Loop finished but nothing ever arrived — don't leave the bubble stuck blank.
+      if (!accumulated) {
+        setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: failMsg }]);
+      }
+    } catch {
+      // Only show the fallback if we hadn't already streamed in a partial reply.
+      if (!accumulated) {
+        setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: failMsg }]);
+      }
+    }
     setLunaStreaming(false);
   }
 
