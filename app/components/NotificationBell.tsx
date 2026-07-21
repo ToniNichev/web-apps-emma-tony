@@ -77,7 +77,8 @@ export default function NotificationBell() {
   }
 
   async function markRead() {
-    await fetch('/api/notifications/read', { method: 'POST' });
+    const res = await fetch('/api/notifications/read', { method: 'POST' });
+    if (!res.ok) return; // don't show "read" locally if it wasn't actually persisted
     setNotifs(ns => ns.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
   }
 

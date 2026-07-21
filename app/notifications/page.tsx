@@ -54,10 +54,16 @@ export default async function NotificationsPage() {
     LIMIT 100
   `, [session.id]) as any[];
 
-  await db.execute(
-    'UPDATE notifications SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL',
-    [session.id]
-  );
+  // Only mark as read the notifications actually shown above — an unbounded
+  // UPDATE here would silently mark anything beyond LIMIT 100 as read too,
+  // even though the user never saw it.
+  const shownIds = (notifs as any[]).map(n => n.id);
+  if (shownIds.length > 0) {
+    await db.execute(
+      `UPDATE notifications SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL AND id IN (${shownIds.map(() => '?').join(',')})`,
+      [session.id, ...shownIds]
+    );
+  }
 
   return (
           <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
