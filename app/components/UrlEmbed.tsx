@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+
 type EmbedLink = { type: 'youtube'; id: string; url: string } | { type: 'tiktok'; url: string };
 
 const YT_RE  = /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/g;
@@ -54,7 +56,122 @@ function renderText(text: string) {
   ));
 }
 
+type SafetyState =
+  | { status: 'loading' }
+  | { status: 'safe'; title: string; thumbnail: string }
+  | { status: 'unsafe'; title: string; reason: string }
+  | { status: 'error' };
+
 function YouTubeCard({ id, url }: { id: string; url: string }) {
+  const [safety, setSafety] = useState<SafetyState>({ status: 'loading' });
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/youtube/safety?videoId=${id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data.safe) {
+          setSafety({ status: 'safe', title: data.title, thumbnail: data.thumbnail });
+        } else {
+          setSafety({ status: 'unsafe', title: data.title, reason: data.reason });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSafety({ status: 'error' });
+      });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // Loading shimmer
+  if (safety.status === 'loading') {
+    return (
+      <div className="px-4 pb-3">
+        <div className="border border-gray-200 rounded-xl overflow-hidden animate-pulse">
+          <div className="bg-gray-200 w-full aspect-video" />
+          <div className="p-3 flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-gray-200 flex-shrink-0" />
+            <div className="h-3 bg-gray-200 rounded w-2/3" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Safe: thumbnail with play button, swaps to player on click
+  if (safety.status === 'safe') {
+    const thumbnail = safety.thumbnail || `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    return (
+      <div className="px-4 pb-3">
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="relative w-full aspect-video bg-black">
+            {playing ? (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&autoplay=1`}
+                title={safety.title || 'YouTube video'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="absolute inset-0 w-full h-full"
+              />
+            ) : (
+              <button
+                onClick={() => setPlaying(true)}
+                className="absolute inset-0 w-full h-full group"
+                aria-label="Play video"
+              >
+                <img
+                  src={thumbnail}
+                  alt={safety.title || 'YouTube video thumbnail'}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition">
+                  <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                    <svg viewBox="0 0 24 24" className="w-8 h-8 fill-white ml-1">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </div>
+                </div>
+              </button>
+            )}
+          </div>
+          {safety.title && (
+            <div className="px-3 py-2 flex items-center gap-2 bg-white">
+              <div className="w-5 h-5 rounded bg-red-600 flex items-center justify-center flex-shrink-0">
+                <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white">
+                  <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/>
+                </svg>
+              </div>
+              <p className="text-xs text-gray-600 truncate">{safety.title}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Unsafe: warning card, no embed
+  if (safety.status === 'unsafe') {
+    return (
+      <div className="px-4 pb-3">
+        <div className="flex items-center gap-3 border border-orange-200 bg-orange-50 rounded-xl p-3">
+          <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-orange-500">
+              <path d="M12 2L1 21h22L12 2zm0 3.5L20.5 19h-17L12 5.5zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-orange-700">Video not approved</p>
+            <p className="text-xs text-orange-500 truncate">
+              {safety.title || 'This video'} couldn&apos;t be verified as kid-friendly
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error fallback: show plain link card
   return (
     <div className="px-4 pb-3">
       <a
