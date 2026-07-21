@@ -10,7 +10,7 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge' | 'kindness';
 
 type Invite = {
   id: number;
@@ -41,6 +41,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const [challengeDate, setChallengeDate] = useState(new Date().toISOString().slice(0, 10));
   const [challengeSaving, setChallengeSaving] = useState(false);
   const [challengeSaved, setChallengeSaved] = useState(false);
+  const [kindnessReports, setKindnessReports] = useState<any[]>([]);
   const bannerFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,7 +57,19 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     if (tab === 'invites') {
       fetch('/api/admin/invites').then(r => r.json()).then(setInvites);
     }
+    if (tab === 'kindness') {
+      fetch('/api/admin/kindness').then(r => r.json()).then(setKindnessReports);
+    }
   }, [tab]);
+
+  async function resolveKindnessReport(id: number, restore: boolean) {
+    await fetch('/api/admin/kindness', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, restore }),
+    });
+    setKindnessReports(rs => rs.filter(r => r.id !== id));
+  }
 
   async function generateInvite() {
     setInviteGenerating(true);
@@ -153,6 +166,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     { id: 'invites', label: 'Invites', emoji: '🔑' },
     { id: 'recap',   label: 'Recap',   emoji: '📊' },
     { id: 'challenge', label: 'Challenge', emoji: '🎯' },
+    { id: 'kindness', label: 'Kindness', emoji: '💛' },
   ];
 
   return (
@@ -646,6 +660,44 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
             >
               {challengeSaved ? '✓ Challenge set!' : challengeSaving ? 'Saving…' : 'Set challenge'}
             </button>
+          </div>
+        </div>
+      )}
+      {/* ── Kindness tab ── */}
+      {tab === 'kindness' && (
+        <div className="space-y-4">
+          <div className="card p-6">
+            <p className="font-semibold text-gray-700 text-sm mb-1">Reported Kindness Notes</p>
+            <p className="text-xs text-gray-400 mb-4">Notes a recipient flagged. Sender is shown here for moderation only — never to other users.</p>
+
+            {kindnessReports.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No open reports 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {kindnessReports.map(r => (
+                  <div key={r.id} className="border border-gray-100 rounded-xl p-4">
+                    <p className="text-sm text-gray-700">💛 {r.message}</p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      From @{r.sender_username} ({r.sender_first_name}) to @{r.recipient_username} ({r.recipient_first_name})
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => resolveKindnessReport(r.id, true)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                      >
+                        Restore note
+                      </button>
+                      <button
+                        onClick={() => resolveKindnessReport(r.id, false)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition"
+                      >
+                        Delete permanently
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

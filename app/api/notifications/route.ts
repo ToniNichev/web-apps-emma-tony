@@ -19,5 +19,13 @@ export async function GET() {
     LIMIT 50
   `, [session.id]) as any[];
 
-  return NextResponse.json(rows);
+  // Kindness notes must stay anonymous even at the network level — actor_id is
+  // populated for FK/audit integrity but must never reach the recipient's client.
+  const sanitized = (rows as any[]).map(n =>
+    n.type === 'kindness_note'
+      ? { ...n, actor_id: null, actor_username: null, actor_first_name: null, actor_last_name: null, actor_profile_picture: null }
+      : n
+  );
+
+  return NextResponse.json(sanitized);
 }

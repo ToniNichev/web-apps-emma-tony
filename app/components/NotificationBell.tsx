@@ -5,7 +5,7 @@ import { useAppSocket } from './SocketProvider';
 
 interface Notification {
   id: number;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response' | 'kindness_note';
   actor_first_name: string;
   actor_username: string;
   actor_profile_picture: string | null;
@@ -33,6 +33,7 @@ function notifText(n: Notification) {
     case 'message': return `sent you a message: "${n.message_preview}"`;
     case 'poll_vote': return 'voted on your poll';
     case 'challenge_response': return `responded to today's challenge 🎯`;
+    case 'kindness_note': return 'sent you kindness 💛';
   }
 }
 
@@ -40,13 +41,14 @@ function notifLink(n: Notification) {
   if (n.type === 'message') return '/messages';
   if (n.type === 'follow') return `/profile/${n.actor_username}`;
   if (n.type === 'challenge_response') return '/challenges';
+  if (n.type === 'kindness_note') return '/kindness';
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
 }
 
 function showBrowserNotif(n: Notification) {
   if (typeof window === 'undefined' || Notification.permission !== 'granted') return;
-  const body = `${n.actor_first_name} ${notifText(n)}`;
+  const body = n.type === 'kindness_note' ? 'Someone sent you kindness 💛' : `${n.actor_first_name} ${notifText(n)}`;
   try {
     new Notification("Emma's Space 🌸", { body, icon: '/icon.svg' });
   } catch {}
@@ -149,15 +151,25 @@ export default function NotificationBell() {
                 onClick={() => setOpen(false)}
                 className={`flex items-start gap-3 px-4 py-3 hover:bg-pink-50 transition ${!n.read_at ? 'bg-pink-50/50' : ''}`}
               >
-                <div className="w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
-                  {n.actor_profile_picture
-                    ? <img src={n.actor_profile_picture} alt="" className="w-full h-full object-cover" />
-                    : n.actor_first_name[0]}
-                </div>
+                {n.type === 'kindness_note' ? (
+                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-lg flex-shrink-0">💛</div>
+                ) : (
+                  <div className="w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+                    {n.actor_profile_picture
+                      ? <img src={n.actor_profile_picture} alt="" className="w-full h-full object-cover" />
+                      : n.actor_first_name[0]}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm">
-                    <span className="font-semibold">{n.actor_first_name}</span>{' '}
-                    <span className="text-gray-600">{notifText(n)}</span>
+                    {n.type === 'kindness_note' ? (
+                      <span className="text-gray-600">Someone sent you kindness 💛</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold">{n.actor_first_name}</span>{' '}
+                        <span className="text-gray-600">{notifText(n)}</span>
+                      </>
+                    )}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
                 </div>

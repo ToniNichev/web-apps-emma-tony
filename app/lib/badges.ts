@@ -18,6 +18,7 @@ export const BADGES: Badge[] = [
   { id: 'media_star',       emoji: '🎬', label: 'Media Star',       description: 'Posted 5 photos or videos' },
   { id: 'night_owl',        emoji: '🦉', label: 'Night Owl',        description: 'Posted after 10pm' },
   { id: 'early_bird',       emoji: '🐦', label: 'Early Bird',       description: 'Posted before 8am' },
+  { id: 'kind_heart',       emoji: '💛', label: 'Kind Heart',       description: 'Sent 5 kindness notes' },
 ];
 
 async function award(userId: number, badgeId: string) {
@@ -74,6 +75,17 @@ export async function checkBadges(userId: number) {
   const { getPostingStreak } = await import('./streaks');
   const streak = await getPostingStreak(userId);
   if (streak >= 7) await award(userId, 'week_streak');
+
+  // Kindness notes sent — wrapped so a not-yet-migrated kindness_notes table
+  // can't break badge checks for every other action.
+  try {
+    const [[kindnessSent]] = await Promise.all([
+      db.execute('SELECT COUNT(*) as c FROM kindness_notes WHERE sender_id = ?', [userId]) as any,
+    ]);
+    if ((kindnessSent as any[])[0].c >= 5) await award(userId, 'kind_heart');
+  } catch {
+    // kindness_notes table not present yet
+  }
 }
 
 export async function getUserBadges(userId: number): Promise<Badge[]> {

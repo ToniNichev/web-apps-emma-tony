@@ -24,12 +24,14 @@ function notifText(n: any) {
     case 'message': return `sent you a message: "${n.message_preview}"`;
     case 'poll_vote': return 'voted on your poll';
     case 'challenge_response': return "responded to today's challenge 🎯";
+    case 'kindness_note': return 'sent you kindness 💛';
   }
 }
 
 function notifLink(n: any) {
   if (n.type === 'message') return '/messages';
   if (n.type === 'challenge_response') return '/challenges';
+  if (n.type === 'kindness_note') return '/kindness';
   if (n.type === 'follow') return `/profile/${encodeURIComponent(n.actor_username)}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
@@ -73,20 +75,30 @@ export default async function NotificationsPage() {
                 href={notifLink(n)}
                 className={`flex items-start gap-3 px-5 py-4 border-b border-gray-50 hover:bg-pink-50 transition last:border-0 ${!n.read_at ? 'bg-pink-50/40' : ''}`}
               >
-                <div className="w-10 h-10 rounded-full brand-gradient flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
-                  {n.actor_profile_picture
-                    ? <img src={n.actor_profile_picture} alt="" className="w-full h-full object-cover" />
-                    : n.actor_first_name[0]}
-                </div>
+                {n.type === 'kindness_note' ? (
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-xl flex-shrink-0">💛</div>
+                ) : (
+                  <div className="w-10 h-10 rounded-full brand-gradient flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
+                    {n.actor_profile_picture
+                      ? <img src={n.actor_profile_picture} alt="" className="w-full h-full object-cover" />
+                      : n.actor_first_name[0]}
+                  </div>
+                )}
                 <div className="flex-1">
                   <p className="text-sm">
-                    <span className="font-semibold">{n.actor_first_name} {n.actor_last_name}</span>{' '}
-                    <span className="text-gray-600">{notifText(n)}</span>
+                    {n.type === 'kindness_note' ? (
+                      <span className="text-gray-600">Someone sent you kindness 💛</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold">{n.actor_first_name} {n.actor_last_name}</span>{' '}
+                        <span className="text-gray-600">{notifText(n)}</span>
+                      </>
+                    )}
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
                 </div>
                 <span className="text-lg">
-                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : n.type === 'challenge_response' ? '🎯' : '📩'}
+                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : n.type === 'challenge_response' ? '🎯' : n.type === 'kindness_note' ? '💛' : '📩'}
                 </span>
               </Link>
             ))

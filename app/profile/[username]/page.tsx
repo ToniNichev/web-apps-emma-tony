@@ -5,6 +5,7 @@ import db from '@/app/lib/db';
 import PostCard from '@/app/components/PostCard';
 import FollowButton from '@/app/components/FollowButton';
 import MessageButton from '@/app/components/MessageButton';
+import KindnessButton from '@/app/components/KindnessButton';
 import { getPostingStreak } from '@/app/lib/streaks';
 import { getUserBadges } from '@/app/lib/badges';
 
@@ -53,10 +54,15 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
     [session.id, user.id]
   ) as any[];
+  const [theyFollowMeRows] = await db.execute(
+    'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
+    [user.id, session.id]
+  ) as any[];
 
   const followerCount = (followerRows as any[])[0].count;
   const followingCount = (followingRows as any[])[0].count;
   const isFollowing = (isFollowingRows as any[]).length > 0;
+  const theyFollowMe = (theyFollowMeRows as any[]).length > 0;
   const isOwn = session.id === user.id;
   const [streak, badges] = await Promise.all([getPostingStreak(user.id), getUserBadges(user.id)]);
 
@@ -72,8 +78,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
                 ? <img src={user.profile_picture} alt="" className="w-full h-full object-cover" />
                 : (user.first_name?.[0] || user.username[0])}
             </div>
-            {!isOwn && (<><MessageButton otherUserId={user.id} />
-<FollowButton userId={user.id} initialFollowing={isFollowing} /></>
+            {!isOwn && (<>
+              {isFollowing && theyFollowMe && <KindnessButton userId={user.id} />}
+              <MessageButton otherUserId={user.id} />
+              <FollowButton userId={user.id} initialFollowing={isFollowing} />
+            </>
             )}
           </div>
           <div className="flex items-center gap-2">
