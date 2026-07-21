@@ -19,6 +19,7 @@ export const BADGES: Badge[] = [
   { id: 'night_owl',        emoji: '🦉', label: 'Night Owl',        description: 'Posted after 10pm' },
   { id: 'early_bird',       emoji: '🐦', label: 'Early Bird',       description: 'Posted before 8am' },
   { id: 'kind_heart',       emoji: '💛', label: 'Kind Heart',       description: 'Sent 5 kindness notes' },
+  { id: 'master_artist',    emoji: '🎨', label: 'Master Artist',    description: 'Won 3 rounds of Draw & Guess' },
 ];
 
 async function award(userId: number, badgeId: string) {
@@ -85,6 +86,17 @@ export async function checkBadges(userId: number) {
     if ((kindnessSent as any[])[0].c >= 5) await award(userId, 'kind_heart');
   } catch {
     // kindness_notes table not present yet
+  }
+
+  // Draw & Guess round wins — each correct guess is worth a flat 10 points,
+  // so total score / 10 is the number of rounds won across all rooms.
+  try {
+    const [[scoreTotal]] = await Promise.all([
+      db.execute('SELECT COALESCE(SUM(score), 0) as total FROM game_room_players WHERE user_id = ?', [userId]) as any,
+    ]);
+    if ((scoreTotal as any[])[0].total >= 30) await award(userId, 'master_artist');
+  } catch {
+    // game_rooms table not present yet
   }
 }
 

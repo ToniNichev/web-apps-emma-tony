@@ -25,6 +25,7 @@ function notifText(n: any) {
     case 'poll_vote': return 'voted on your poll';
     case 'challenge_response': return "responded to today's challenge 🎯";
     case 'kindness_note': return 'sent you kindness 💛';
+    case 'game_invite': return 'invited you to play Draw & Guess 🎨';
   }
 }
 
@@ -32,6 +33,7 @@ function notifLink(n: any) {
   if (n.type === 'message') return '/messages';
   if (n.type === 'challenge_response') return '/challenges';
   if (n.type === 'kindness_note') return '/kindness';
+  if (n.type === 'game_invite') return `/play/draw/${n.message_preview}`;
   if (n.type === 'follow') return `/profile/${encodeURIComponent(n.actor_username)}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
@@ -104,7 +106,7 @@ export default async function NotificationsPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{timeAgo(n.created_at)}</p>
                 </div>
                 <span className="text-lg">
-                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : n.type === 'challenge_response' ? '🎯' : n.type === 'kindness_note' ? '💛' : '📩'}
+                  {n.type === 'like' ? '❤️' : n.type === 'comment' ? '💬' : n.type === 'follow' ? '✨' : n.type === 'poll_vote' ? '🗳️' : n.type === 'challenge_response' ? '🎯' : n.type === 'kindness_note' ? '💛' : n.type === 'game_invite' ? '🎨' : '📩'}
                 </span>
               </Link>
             ))

@@ -33,6 +33,12 @@ app.prepare().then(() => {
     cors: { origin: '*', methods: ['GET', 'POST'] },
   });
 
+  // Draw & Guess game routes (running in this same process) need to push
+  // socket events after a DB write — e.g. privately telling the drawer the
+  // secret word. Sharing `io` via globalThis is the standard way a custom
+  // Next.js server exposes its long-lived socket instance to API routes.
+  globalThis.__gameIO = io;
+
   // Mount PeerJS AFTER Socket.io
   const peerServer = ExpressPeerServer(httpServer, { path: '/' });
   expressApp.use('/peerjs', peerServer);
@@ -91,6 +97,28 @@ app.prepare().then(() => {
     socket.on('call_ended', ({ to_user_id }) => {
       io.to(`user:${to_user_id}`).emit('call_ended');
     });
+
+    // Draw & Guess — ephemeral relay only. Turn state (who's currently
+    // drawing) lives in app/lib/draw-guess.ts, written by the Next.js API
+    // routes that own the actual game logic; this just checks the sender's
+    // JWT-verified identity against it before re-broadcasting.
+    socket.on('game:join_room', ({ room_id }) => {
+      socket.join(`game:${room_id}`);
+    });
+    socket.on('game:leave_room', ({ room_id }) => {
+      socket.leave(`game:${room_id}`);
+    });
+    socket.on('game:draw_stroke', ({ room_id, stroke }) => {
+      const state = globalThis.__gameRoomState?.get(room_id);
+      if (!state || state.drawerId !== userId) return;
+      socket.to(`game:${room_id}`).emit('game:draw_stroke', { stroke });
+    });
+    socket.on('game:clear_canvas', ({ room_id }) => {
+      const state = globalThis.__gameRoomState?.get(room_id);
+      if (!state || state.drawerId !== userId) return;
+      socket.to(`game:${room_id}`).emit('game:clear_canvas');
+    });
+
     socket.on('disconnect', () => {
       console.log(`[SOCKET] Disconnected: ${socket.user.username}`);
     });

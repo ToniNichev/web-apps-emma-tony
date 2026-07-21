@@ -5,7 +5,7 @@ import { useAppSocket } from './SocketProvider';
 
 interface Notification {
   id: number;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response' | 'kindness_note';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response' | 'kindness_note' | 'game_invite';
   actor_first_name: string;
   actor_username: string;
   actor_profile_picture: string | null;
@@ -34,6 +34,7 @@ function notifText(n: Notification) {
     case 'poll_vote': return 'voted on your poll';
     case 'challenge_response': return `responded to today's challenge 🎯`;
     case 'kindness_note': return 'sent you kindness 💛';
+    case 'game_invite': return 'invited you to play Draw & Guess 🎨';
   }
 }
 
@@ -42,6 +43,7 @@ function notifLink(n: Notification) {
   if (n.type === 'follow') return `/profile/${n.actor_username}`;
   if (n.type === 'challenge_response') return '/challenges';
   if (n.type === 'kindness_note') return '/kindness';
+  if (n.type === 'game_invite') return `/play/draw/${n.message_preview}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
 }
