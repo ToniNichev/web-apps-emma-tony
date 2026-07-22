@@ -8,6 +8,8 @@ const AVATAR_SIZE = 40;
 const MOVE_SPEED = 240; // px/sec
 const SEND_INTERVAL_MS = 100; // ~10Hz
 const INTERP_MS = 100;
+const AVATAR_RADIUS = AVATAR_SIZE / 2;
+const OBJECT_RADIUS = 22; // roughly matches the decoration emoji's rendered size
 
 interface Player {
   user_id: number;
@@ -204,6 +206,29 @@ export default function HangoutRoomClient({
 
   const touchDir = useRef({ x: 0, y: 0 });
 
+  // Read inside the movement rAF loop below, not during render — kept in sync
+  // via the effect underneath so the loop always checks against the latest
+  // decorations without needing to be torn down and restarted every time
+  // someone places or removes one.
+  const objectsRef = useRef(objects);
+  useEffect(() => { objectsRef.current = objects; }, [objects]);
+
+  // Compares distance-to-object at the current vs. proposed position, not
+  // just an absolute radius check — a pure radius check can permanently trap
+  // a player if an object ever ends up on top of them (a decoration placed
+  // right where they're standing, or an unlucky spawn): every incremental
+  // step "away" would still land inside the radius and get rejected forever.
+  // Comparing to the current distance means "moving away" is always allowed.
+  function blockedByObject(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    const combined = AVATAR_RADIUS + OBJECT_RADIUS;
+    return objectsRef.current.some(o => {
+      const distFrom = Math.hypot(fromX - o.x, fromY - o.y);
+      const distTo = Math.hypot(toX - o.x, toY - o.y);
+      if (distFrom >= combined) return distTo < combined;
+      return distTo < distFrom;
+    });
+  }
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -225,9 +250,17 @@ export default function HangoutRoomClient({
 
       if (dx !== 0 || dy !== 0) {
         const len = Math.hypot(dx, dy) || 1;
+        const stepX = (dx / len) * MOVE_SPEED * dt;
+        const stepY = (dy / len) * MOVE_SPEED * dt;
         setMe(pos => {
-          const nx = Math.max(0, Math.min(ROOM_W, pos.x + (dx / len) * MOVE_SPEED * dt));
-          const ny = Math.max(0, Math.min(ROOM_H, pos.y + (dy / len) * MOVE_SPEED * dt));
+          // Axis-separated collision so bumping into a decoration slides you
+          // along it instead of just stopping dead.
+          let nx = pos.x;
+          let ny = pos.y;
+          const tryX = Math.max(0, Math.min(ROOM_W, pos.x + stepX));
+          if (!blockedByObject(pos.x, pos.y, tryX, ny)) nx = tryX;
+          const tryY = Math.max(0, Math.min(ROOM_H, pos.y + stepY));
+          if (!blockedByObject(pos.x, pos.y, nx, tryY)) ny = tryY;
           return { x: nx, y: ny };
         });
       }
