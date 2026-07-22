@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppSocket } from '@/app/components/SocketProvider';
-import { HANGOUT_OBJECTS, ROOM_W, ROOM_H, emojiForType, type HangoutObjectType } from '@/app/lib/hangout-objects';
+import { HANGOUT_OBJECTS, ROOM_W, ROOM_H, BARRIER_RADIUS, emojiForType, type HangoutObjectType } from '@/app/lib/hangout-objects';
 import { defaultEmojiFor, defaultColorHexFor, colorHex } from '@/app/lib/avatar-options';
 
 const AVATAR_SIZE = 40;
@@ -30,6 +30,12 @@ interface RoomObject {
   placed_by: number;
 }
 
+interface Barrier {
+  id: number;
+  x: number;
+  y: number;
+}
+
 interface RoomState {
   id: number;
   host_id: number;
@@ -39,6 +45,7 @@ interface RoomState {
   background_status: 'active' | 'reported';
   players: Player[];
   objects: RoomObject[];
+  barriers: Barrier[];
   my_status: 'invited' | 'joined' | 'left';
 }
 
@@ -69,6 +76,8 @@ export default function HangoutRoomClient({
   const [room, setRoom] = useState(initialRoom);
   const [me, setMe] = useState({ x: ROOM_W / 2, y: ROOM_H / 2 });
   const [objects, setObjects] = useState<RoomObject[]>(initialRoom.objects);
+  const [barriers, setBarriers] = useState<Barrier[]>(initialRoom.barriers);
+  const [barrierMode, setBarrierMode] = useState(false);
   const [background, setBackground] = useState(initialRoom.background_url);
   const [selectedObject, setSelectedObject] = useState<HangoutObjectType | null>(null);
   const [joining, setJoining] = useState(false);
@@ -123,6 +132,7 @@ export default function HangoutRoomClient({
       const data = await res.json();
       setRoom(data);
       setObjects(data.objects);
+      setBarriers(data.barriers);
       setBackground(data.background_url);
     }
   }, [roomId]);
@@ -165,6 +175,12 @@ export default function HangoutRoomClient({
     function onObjectRemoved({ id }: { id: number }) {
       setObjects(os => os.filter(o => o.id !== id));
     }
+    function onBarrierPlaced(b: Barrier) {
+      setBarriers(bs => [...bs, b]);
+    }
+    function onBarrierRemoved({ id }: { id: number }) {
+      setBarriers(bs => bs.filter(b => b.id !== id));
+    }
     function onBackgroundUpdated({ url }: { url: string | null }) {
       setBackground(url);
     }
@@ -177,6 +193,8 @@ export default function HangoutRoomClient({
     socket.on('hangout:room_updated', onRoomUpdated);
     socket.on('hangout:object_placed', onObjectPlaced);
     socket.on('hangout:object_removed', onObjectRemoved);
+    socket.on('hangout:barrier_placed', onBarrierPlaced);
+    socket.on('hangout:barrier_removed', onBarrierRemoved);
     socket.on('hangout:background_updated', onBackgroundUpdated);
     socket.on('hangout:chat', onChat);
     return () => {
@@ -185,6 +203,8 @@ export default function HangoutRoomClient({
       socket.off('hangout:room_updated', onRoomUpdated);
       socket.off('hangout:object_placed', onObjectPlaced);
       socket.off('hangout:object_removed', onObjectRemoved);
+      socket.off('hangout:barrier_placed', onBarrierPlaced);
+      socket.off('hangout:barrier_removed', onBarrierRemoved);
       socket.off('hangout:background_updated', onBackgroundUpdated);
       socket.off('hangout:chat', onChat);
     };
@@ -207,21 +227,27 @@ export default function HangoutRoomClient({
   const touchDir = useRef({ x: 0, y: 0 });
 
   // Read inside the movement rAF loop below, not during render — kept in sync
-  // via the effect underneath so the loop always checks against the latest
-  // decorations without needing to be torn down and restarted every time
-  // someone places or removes one.
-  const objectsRef = useRef(objects);
-  useEffect(() => { objectsRef.current = objects; }, [objects]);
+  // via the effects underneath so the loop always checks against the latest
+  // decorations/barriers without needing to be torn down and restarted every
+  // time someone places or removes one.
+  const obstaclesRef = useRef<{ x: number; y: number; radius: number }[]>([]);
+  useEffect(() => {
+    obstaclesRef.current = [
+      ...objects.map(o => ({ x: o.x, y: o.y, radius: OBJECT_RADIUS })),
+      ...barriers.map(b => ({ x: b.x, y: b.y, radius: BARRIER_RADIUS })),
+    ];
+  }, [objects, barriers]);
 
-  // Compares distance-to-object at the current vs. proposed position, not
+  // Compares distance-to-obstacle at the current vs. proposed position, not
   // just an absolute radius check — a pure radius check can permanently trap
-  // a player if an object ever ends up on top of them (a decoration placed
-  // right where they're standing, or an unlucky spawn): every incremental
-  // step "away" would still land inside the radius and get rejected forever.
-  // Comparing to the current distance means "moving away" is always allowed.
-  function blockedByObject(fromX: number, fromY: number, toX: number, toY: number): boolean {
-    const combined = AVATAR_RADIUS + OBJECT_RADIUS;
-    return objectsRef.current.some(o => {
+  // a player if an obstacle ever ends up on top of them (a decoration placed
+  // right where they're standing, an unlucky spawn, or a barrier drawn under
+  // someone already there). Every incremental step "away" would otherwise
+  // still land inside the radius and get rejected forever. Comparing to the
+  // current distance means moving away is always allowed.
+  function blockedByObstacle(fromX: number, fromY: number, toX: number, toY: number): boolean {
+    return obstaclesRef.current.some(o => {
+      const combined = AVATAR_RADIUS + o.radius;
       const distFrom = Math.hypot(fromX - o.x, fromY - o.y);
       const distTo = Math.hypot(toX - o.x, toY - o.y);
       if (distFrom >= combined) return distTo < combined;
@@ -253,14 +279,14 @@ export default function HangoutRoomClient({
         const stepX = (dx / len) * MOVE_SPEED * dt;
         const stepY = (dy / len) * MOVE_SPEED * dt;
         setMe(pos => {
-          // Axis-separated collision so bumping into a decoration slides you
-          // along it instead of just stopping dead.
+          // Axis-separated collision so bumping into a decoration or a
+          // marked-off barrier slides you along it instead of stopping dead.
           let nx = pos.x;
           let ny = pos.y;
           const tryX = Math.max(0, Math.min(ROOM_W, pos.x + stepX));
-          if (!blockedByObject(pos.x, pos.y, tryX, ny)) nx = tryX;
+          if (!blockedByObstacle(pos.x, pos.y, tryX, ny)) nx = tryX;
           const tryY = Math.max(0, Math.min(ROOM_H, pos.y + stepY));
-          if (!blockedByObject(pos.x, pos.y, nx, tryY)) ny = tryY;
+          if (!blockedByObstacle(pos.x, pos.y, nx, tryY)) ny = tryY;
           return { x: nx, y: ny };
         });
       }
@@ -288,11 +314,20 @@ export default function HangoutRoomClient({
   }
 
   function onStageClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!selectedObject || !stageRef.current) return;
+    if (!stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
     const x = Math.round(((e.clientX - rect.left) / rect.width) * ROOM_W);
     const y = Math.round(((e.clientY - rect.top) / rect.height) * ROOM_H);
-    placeObject(selectedObject, x, y);
+
+    if (barrierMode) {
+      // Clicking on an existing barrier removes it (paint/erase toggle);
+      // clicking empty space adds a new one.
+      const hit = barriers.find(b => Math.hypot(b.x - x, b.y - y) < BARRIER_RADIUS);
+      if (hit) removeBarrier(hit.id);
+      else placeBarrier(x, y);
+      return;
+    }
+    if (selectedObject) placeObject(selectedObject, x, y);
   }
 
   async function placeObject(object_type: HangoutObjectType, x: number, y: number) {
@@ -306,6 +341,18 @@ export default function HangoutRoomClient({
 
   async function removeObject(id: number) {
     await fetch(`/api/hangout/rooms/${roomId}/objects/${id}`, { method: 'DELETE' });
+  }
+
+  async function placeBarrier(x: number, y: number) {
+    await fetch(`/api/hangout/rooms/${roomId}/barriers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    });
+  }
+
+  async function removeBarrier(id: number) {
+    await fetch(`/api/hangout/rooms/${roomId}/barriers/${id}`, { method: 'DELETE' });
   }
 
   async function generateBackground(e: React.FormEvent) {
@@ -453,6 +500,16 @@ export default function HangoutRoomClient({
               🖼️ Background
             </button>
           )}
+          {isHost && (
+            <button
+              onClick={() => { setBarrierMode(v => !v); setSelectedObject(null); }}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${
+                barrierMode ? 'bg-amber-100 text-amber-700 ring-2 ring-amber-300' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+              }`}
+            >
+              🚧 {barrierMode ? 'Done marking' : 'Block area'}
+            </button>
+          )}
           <button onClick={reportBackground} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition">
             🚩 Report
           </button>
@@ -482,7 +539,7 @@ export default function HangoutRoomClient({
         <div
           ref={stageRef}
           onClick={onStageClick}
-          className={`relative w-full overflow-hidden ${selectedObject ? 'cursor-crosshair' : ''}`}
+          className={`relative w-full overflow-hidden ${selectedObject || barrierMode ? 'cursor-crosshair' : ''}`}
           style={{ aspectRatio: `${ROOM_W}/${ROOM_H}` }}
         >
           {background ? (
@@ -490,6 +547,23 @@ export default function HangoutRoomClient({
           ) : (
             <div className="absolute inset-0 brand-gradient opacity-20" />
           )}
+          {/* Barriers are always subtly visible — an invisible wall is a
+              frustrating surprise, so everyone can see why they can't walk here. */}
+          {barriers.map(b => (
+            <div
+              key={`barrier-${b.id}`}
+              className={`absolute rounded-full pointer-events-none transition-colors ${
+                barrierMode ? 'bg-amber-400/30 border-2 border-amber-500/50' : 'bg-sky-400/10'
+              }`}
+              style={{
+                left: `${(b.x / ROOM_W) * 100}%`,
+                top: `${(b.y / ROOM_H) * 100}%`,
+                width: BARRIER_RADIUS * 2,
+                height: BARRIER_RADIUS * 2,
+                transform: 'translate(-50%, -50%)',
+              }}
+            />
+          ))}
           {renderables.map(r => r.el)}
         </div>
 
@@ -499,14 +573,16 @@ export default function HangoutRoomClient({
               key={o.type}
               onClick={() => setSelectedObject(v => v === o.type ? null : o.type)}
               title={o.label}
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0 transition ${
+              disabled={barrierMode}
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0 transition disabled:opacity-40 ${
                 selectedObject === o.type ? 'bg-purple-100 ring-2 ring-purple-300' : 'bg-gray-50 hover:bg-gray-100'
               }`}
             >
               {o.emoji}
             </button>
           ))}
-          {selectedObject && <span className="text-xs text-gray-400 flex-shrink-0">Tap the room to place it</span>}
+          {selectedObject && !barrierMode && <span className="text-xs text-gray-400 flex-shrink-0">Tap the room to place it</span>}
+          {barrierMode && <span className="text-xs text-amber-600 font-medium flex-shrink-0">Tap to mark, tap a marked spot to erase</span>}
         </div>
       </div>
 

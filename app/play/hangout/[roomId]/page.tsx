@@ -37,6 +37,11 @@ export default async function HangoutRoomPage({ params }: { params: Promise<{ ro
     [roomId]
   ) as any[];
 
+  const [barrierRows] = await db.execute(
+    'SELECT id, x, y FROM hangout_room_barriers WHERE room_id = ?',
+    [roomId]
+  ) as any[];
+
   const effectiveBackgroundUrl = room.background_status === 'reported' ? null : room.background_url;
 
   return (
@@ -53,6 +58,7 @@ export default async function HangoutRoomPage({ params }: { params: Promise<{ ro
           background_status: room.background_status,
           players: playerRows,
           objects: objectRows,
+          barriers: barrierRows,
           my_status: me.status,
         }}
       />

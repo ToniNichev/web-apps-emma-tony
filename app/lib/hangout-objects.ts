@@ -15,3 +15,11 @@ export function emojiForType(type: string): string {
 
 export const ROOM_W = 800;
 export const ROOM_H = 600;
+
+// Barriers — host-placed circular "don't walk here" zones (e.g. marking a
+// waterfall out of a generated background). Larger radius than decorations
+// since a single barrier needs to help cover a real terrain feature; the
+// host clicks several times to rope off an irregular area with overlapping
+// circles rather than drawing a precise outline.
+export const BARRIER_RADIUS = 40;
+export const MAX_BARRIERS_PER_ROOM = 40;

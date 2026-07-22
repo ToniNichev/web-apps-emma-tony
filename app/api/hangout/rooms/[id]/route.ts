@@ -34,6 +34,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     [id]
   ) as any[];
 
+  const [barrierRows] = await db.execute(
+    'SELECT id, x, y FROM hangout_room_barriers WHERE room_id = ?',
+    [id]
+  ) as any[];
+
   // A reported background is never served, even to the host — falls back to
   // the built-in default until an admin clears or restores it.
   const effectiveBackgroundUrl = room.background_status === 'reported' ? null : room.background_url;
@@ -47,6 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     background_status: room.background_status,
     players: playerRows,
     objects: objectRows,
+    barriers: barrierRows,
     my_status: me.status,
   });
 }
