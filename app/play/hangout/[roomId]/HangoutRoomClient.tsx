@@ -418,7 +418,7 @@ export default function HangoutRoomClient({
           style={{ left: `${(me.x / ROOM_W) * 100}%`, top: `${(me.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(me.y) }}
         >
           <Avatar {...avatarPropsFor(currentUserId)} size={AVATAR_SIZE} />
-          <span className="text-[10px] bg-white/80 px-1.5 rounded-full mt-0.5">You</span>
+          <span className="text-[10px] text-slate-800 bg-white/80 px-1.5 rounded-full mt-0.5">You</span>
         </div>
       ),
     },
@@ -435,7 +435,7 @@ export default function HangoutRoomClient({
             style={{ left: `${(pos.x / ROOM_W) * 100}%`, top: `${(pos.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(pos.y), opacity }}
           >
             <Avatar {...avatarPropsFor(uid)} size={AVATAR_SIZE} />
-            <span className="text-[10px] bg-white/80 px-1.5 rounded-full mt-0.5">{p.first_name}</span>
+            <span className="text-[10px] text-slate-800 bg-white/80 px-1.5 rounded-full mt-0.5">{p.first_name}</span>
           </div>
         ),
       };
