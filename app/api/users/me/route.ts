@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
 import bcrypt from 'bcryptjs';
+import { AVATAR_EMOJIS, AVATAR_COLORS, AVATAR_ACCESSORIES } from '@/app/lib/avatar-options';
 
 const VALID_THEMES = ['bloom', 'ocean', 'sunset', 'forest', 'midnight'];
 
@@ -37,6 +38,24 @@ export async function PATCH(request: Request) {
     const res = NextResponse.json({ message: 'Dark mode updated' });
     res.cookies.set('dark', val ? '1' : '0', { path: '/', maxAge: 60 * 60 * 24 * 365, sameSite: 'lax' });
     return res;
+  }
+
+  const { avatar_emoji, avatar_color, avatar_accessory } = body;
+  if (avatar_emoji !== undefined || avatar_color !== undefined || avatar_accessory !== undefined) {
+    if (avatar_emoji !== null && !AVATAR_EMOJIS.includes(avatar_emoji)) {
+      return NextResponse.json({ message: 'Invalid avatar' }, { status: 400 });
+    }
+    if (avatar_color !== null && !AVATAR_COLORS.some(c => c.id === avatar_color)) {
+      return NextResponse.json({ message: 'Invalid color' }, { status: 400 });
+    }
+    if (avatar_accessory !== null && !AVATAR_ACCESSORIES.includes(avatar_accessory)) {
+      return NextResponse.json({ message: 'Invalid accessory' }, { status: 400 });
+    }
+    await db.execute(
+      'UPDATE users SET avatar_emoji = ?, avatar_color = ?, avatar_accessory = ? WHERE id = ?',
+      [avatar_emoji ?? null, avatar_color ?? null, avatar_accessory ?? null, session.id]
+    );
+    return NextResponse.json({ message: 'Avatar updated' });
   }
 
   await db.execute(

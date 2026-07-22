@@ -21,7 +21,8 @@ export default async function HangoutRoomPage({ params }: { params: Promise<{ ro
   if (!room) notFound();
 
   const [playerRows] = await db.execute(
-    `SELECT gp.user_id, gp.status, u.username, u.first_name, u.profile_picture
+    `SELECT gp.user_id, gp.status, u.username, u.first_name, u.profile_picture,
+       u.avatar_emoji, u.avatar_color, u.avatar_accessory
      FROM hangout_room_players gp JOIN users u ON u.id = gp.user_id
      WHERE gp.room_id = ?
      ORDER BY gp.id ASC`,

@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppSocket } from '@/app/components/SocketProvider';
 import { HANGOUT_OBJECTS, ROOM_W, ROOM_H, emojiForType, type HangoutObjectType } from '@/app/lib/hangout-objects';
+import { defaultEmojiFor, defaultColorHexFor, colorHex } from '@/app/lib/avatar-options';
 
 const AVATAR_SIZE = 40;
 const MOVE_SPEED = 240; // px/sec
@@ -14,6 +15,9 @@ interface Player {
   username: string;
   first_name: string;
   profile_picture: string | null;
+  avatar_emoji: string | null;
+  avatar_color: string | null;
+  avatar_accessory: string | null;
 }
 
 interface RoomObject {
@@ -97,6 +101,18 @@ export default function HangoutRoomClient({
     if (age < 8000) return 1;
     if (age < 15000) return 1 - (age - 8000) / 7000;
     return 0;
+  }
+
+  // Looked up fresh from room.players on every render — avatar customization
+  // rarely changes and isn't carried over the movement socket payload at all,
+  // so there's no staleness risk the way there was for name/picture earlier.
+  function avatarPropsFor(userId: number) {
+    const p = room.players.find(pl => pl.user_id === userId);
+    return {
+      emoji: p?.avatar_emoji || defaultEmojiFor(userId),
+      color: colorHex(p?.avatar_color) || defaultColorHexFor(userId),
+      accessory: p?.avatar_accessory || null,
+    };
   }
 
   const refreshRoom = useCallback(async () => {
@@ -368,7 +384,7 @@ export default function HangoutRoomClient({
           className="absolute flex flex-col items-center"
           style={{ left: `${(me.x / ROOM_W) * 100}%`, top: `${(me.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(me.y) }}
         >
-          <Avatar profilePicture={null} size={AVATAR_SIZE} />
+          <Avatar {...avatarPropsFor(currentUserId)} size={AVATAR_SIZE} />
           <span className="text-[10px] bg-white/80 px-1.5 rounded-full mt-0.5">You</span>
         </div>
       ),
@@ -385,7 +401,7 @@ export default function HangoutRoomClient({
             className="absolute flex flex-col items-center transition-opacity"
             style={{ left: `${(pos.x / ROOM_W) * 100}%`, top: `${(pos.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(pos.y), opacity }}
           >
-            <Avatar profilePicture={p.profile_picture} size={AVATAR_SIZE} />
+            <Avatar {...avatarPropsFor(uid)} size={AVATAR_SIZE} />
             <span className="text-[10px] bg-white/80 px-1.5 rounded-full mt-0.5">{p.first_name}</span>
           </div>
         ),
@@ -506,13 +522,16 @@ export default function HangoutRoomClient({
   );
 }
 
-function Avatar({ profilePicture, size }: { profilePicture: string | null; size: number }) {
+function Avatar({ emoji, color, accessory, size }: { emoji: string; color: string; accessory: string | null; size: number }) {
   return (
     <div
-      className="rounded-full brand-gradient border-2 border-white shadow flex items-center justify-center overflow-hidden flex-shrink-0"
-      style={{ width: size, height: size }}
+      className="relative rounded-full border-2 border-white shadow flex items-center justify-center flex-shrink-0"
+      style={{ width: size, height: size, background: color, fontSize: size * 0.55 }}
     >
-      {profilePicture && <img src={profilePicture} alt="" className="w-full h-full object-cover" />}
+      {emoji}
+      {accessory && (
+        <span className="absolute -top-1 -right-1" style={{ fontSize: size * 0.4 }}>{accessory}</span>
+      )}
     </div>
   );
 }

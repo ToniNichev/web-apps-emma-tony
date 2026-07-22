@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AVATAR_EMOJIS, AVATAR_COLORS, AVATAR_ACCESSORIES, colorHex } from '@/app/lib/avatar-options';
 
 const THEMES = [
   { id: 'bloom',    label: 'Bloom',    from: '#f472b6', to: '#a855f7' },
@@ -22,6 +23,9 @@ interface Props {
     now_playing_song: string | null;
     now_playing_artist: string | null;
     birthday: string | null;
+    avatar_emoji: string | null;
+    avatar_color: string | null;
+    avatar_accessory: string | null;
   };
 }
 
@@ -47,6 +51,31 @@ export default function SettingsClient({ user }: Props) {
   const [msg, setMsg] = useState('');
   const [pwMsg, setPwMsg] = useState('');
   const [themeMsg, setThemeMsg] = useState('');
+
+  const [avatarEmoji, setAvatarEmoji] = useState(user.avatar_emoji);
+  const [avatarColor, setAvatarColor] = useState(user.avatar_color);
+  const [avatarAccessory, setAvatarAccessory] = useState(user.avatar_accessory);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState('');
+
+  async function saveAvatar(next: { emoji?: string | null; color?: string | null; accessory?: string | null }) {
+    const emoji = next.emoji !== undefined ? next.emoji : avatarEmoji;
+    const color = next.color !== undefined ? next.color : avatarColor;
+    const accessory = next.accessory !== undefined ? next.accessory : avatarAccessory;
+    if (next.emoji !== undefined) setAvatarEmoji(next.emoji);
+    if (next.color !== undefined) setAvatarColor(next.color);
+    if (next.accessory !== undefined) setAvatarAccessory(next.accessory);
+
+    setSavingAvatar(true);
+    setAvatarMsg('');
+    const res = await fetch('/api/users/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ avatar_emoji: emoji, avatar_color: color, avatar_accessory: accessory }),
+    });
+    setSavingAvatar(false);
+    setAvatarMsg(res.ok ? '✓ Avatar saved!' : 'Failed to save avatar');
+  }
 
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -269,6 +298,85 @@ export default function SettingsClient({ user }: Props) {
             </span>
           </button>
         </div>
+      </div>
+
+      {/* Hangout Room avatar */}
+      <div className="card p-6">
+        <h2 className="font-bold text-lg mb-1">Hangout Room Avatar</h2>
+        <p className="text-sm text-gray-400 mb-5">Pick how you look when you&apos;re hanging out with friends.</p>
+
+        <div className="flex items-center gap-4 mb-5">
+          <div
+            className="relative w-16 h-16 rounded-full flex items-center justify-center text-3xl border-2 border-white shadow flex-shrink-0"
+            style={{ background: colorHex(avatarColor) || '#e5e7eb' }}
+          >
+            {avatarEmoji || '🙂'}
+            {avatarAccessory && (
+              <span className="absolute -top-1 -right-1 text-lg">{avatarAccessory}</span>
+            )}
+          </div>
+          <p className="text-xs text-gray-400">Preview</p>
+        </div>
+
+        <p className="text-xs font-semibold text-gray-500 mb-2">Character</p>
+        <div className="flex gap-2 flex-wrap mb-4">
+          {AVATAR_EMOJIS.map(e => (
+            <button
+              key={e}
+              onClick={() => saveAvatar({ emoji: e })}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition ${
+                avatarEmoji === e ? 'bg-purple-100 ring-2 ring-purple-300' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-xs font-semibold text-gray-500 mb-2">Color</p>
+        <div className="flex gap-2 flex-wrap mb-4">
+          {AVATAR_COLORS.map(c => (
+            <button
+              key={c.id}
+              onClick={() => saveAvatar({ color: c.id })}
+              title={c.id}
+              className="w-8 h-8 rounded-full transition-transform hover:scale-110"
+              style={{
+                background: c.hex,
+                outline: avatarColor === c.id ? '3px solid #a855f7' : '3px solid transparent',
+                outlineOffset: '2px',
+              }}
+            />
+          ))}
+        </div>
+
+        <p className="text-xs font-semibold text-gray-500 mb-2">Accessory</p>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => saveAvatar({ accessory: null })}
+            className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold transition ${
+              !avatarAccessory ? 'bg-purple-100 ring-2 ring-purple-300 text-purple-600' : 'bg-gray-50 hover:bg-gray-100 text-gray-400'
+            }`}
+          >
+            None
+          </button>
+          {AVATAR_ACCESSORIES.map(a => (
+            <button
+              key={a}
+              onClick={() => saveAvatar({ accessory: a })}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition ${
+                avatarAccessory === a ? 'bg-purple-100 ring-2 ring-purple-300' : 'bg-gray-50 hover:bg-gray-100'
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+
+        {avatarMsg && (
+          <p className={`text-sm mt-4 ${avatarMsg.startsWith('✓') ? 'text-green-500' : 'text-red-500'}`}>{avatarMsg}</p>
+        )}
+        {savingAvatar && <p className="text-xs text-gray-400 mt-2">Saving…</p>}
       </div>
 
       {/* Password */}
