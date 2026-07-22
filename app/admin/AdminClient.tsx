@@ -405,7 +405,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                   <p className="font-semibold text-sm">{u.first_name} {u.last_name}</p>
                   {u.is_admin >= 2 ? <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full font-semibold">Super admin</span> : u.is_admin === 1 ? <span className="text-xs brand-gradient text-white px-2 py-0.5 rounded-full font-semibold">Admin</span> : null}
                 </div>
-                <p className="text-xs text-gray-400">@{u.username}</p>
+                <p className="text-xs text-gray-400">@{u.username}{isSuperAdmin && u.email ? ` · ${u.email}` : ''}</p>
               </div>
               {isSuperAdmin && (
                 <button
