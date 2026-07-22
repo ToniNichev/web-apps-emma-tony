@@ -42,6 +42,16 @@ interface OtherPlayer {
   first_name: string; profile_picture: string | null;
 }
 
+interface ChatMessage {
+  user_id: number;
+  first_name: string;
+  profile_picture: string | null;
+  text: string;
+  t: number;
+}
+
+const MAX_CHAT_MESSAGES = 50;
+
 export default function HangoutRoomClient({
   roomId, currentUserId, initialRoom,
 }: {
@@ -61,6 +71,10 @@ export default function HangoutRoomClient({
   const [bgGenerating, setBgGenerating] = useState(false);
   const [bgProgress, setBgProgress] = useState(0);
   const [bgError, setBgError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatText, setChatText] = useState('');
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const [others, setOthers] = useState<Map<number, OtherPlayer>>(() => new Map());
   // `now` is the single tick driving both interpolation and presence-fade math
@@ -136,6 +150,9 @@ export default function HangoutRoomClient({
     function onBackgroundUpdated({ url }: { url: string | null }) {
       setBackground(url);
     }
+    function onChat(msg: ChatMessage) {
+      setMessages(ms => [...ms, msg].slice(-MAX_CHAT_MESSAGES));
+    }
 
     socket.on('hangout:move', onMove);
     socket.on('hangout:user_left', onUserLeft);
@@ -143,6 +160,7 @@ export default function HangoutRoomClient({
     socket.on('hangout:object_placed', onObjectPlaced);
     socket.on('hangout:object_removed', onObjectRemoved);
     socket.on('hangout:background_updated', onBackgroundUpdated);
+    socket.on('hangout:chat', onChat);
     return () => {
       socket.off('hangout:move', onMove);
       socket.off('hangout:user_left', onUserLeft);
@@ -150,6 +168,7 @@ export default function HangoutRoomClient({
       socket.off('hangout:object_placed', onObjectPlaced);
       socket.off('hangout:object_removed', onObjectRemoved);
       socket.off('hangout:background_updated', onBackgroundUpdated);
+      socket.off('hangout:chat', onChat);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, roomId, currentUserId, refreshRoom]);
@@ -168,6 +187,10 @@ export default function HangoutRoomClient({
   }, [room.my_status]);
 
   const touchDir = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     if (room.my_status !== 'joined') return;
@@ -276,6 +299,23 @@ export default function HangoutRoomClient({
   async function reportBackground() {
     if (!confirm('Report this background for admin review? It will be replaced with the default for everyone until reviewed.')) return;
     await fetch(`/api/hangout/rooms/${roomId}/report-background`, { method: 'POST' });
+  }
+
+  async function sendChat(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatText.trim();
+    if (!text) return;
+    setChatText('');
+    setChatError(null);
+    const res = await fetch(`/api/hangout/rooms/${roomId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setChatError(data.message || 'Something went wrong');
+    }
   }
 
   function setTouchDir(x: number, y: number) {
@@ -419,6 +459,34 @@ export default function HangoutRoomClient({
           ))}
           {selectedObject && <span className="text-xs text-gray-400 flex-shrink-0">Tap the room to place it</span>}
         </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="max-h-40 overflow-y-auto p-3 space-y-1.5">
+          {messages.length === 0 && (
+            <p className="text-xs text-gray-400 text-center py-2">Say hi! 👋</p>
+          )}
+          {messages.map((m, i) => (
+            <p key={i} className="text-sm">
+              <span className="font-semibold text-gray-700">{m.first_name}:</span>{' '}
+              <span className="text-gray-600">{m.text}</span>
+            </p>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+        <form onSubmit={sendChat} className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+          <input
+            value={chatText}
+            onChange={e => setChatText(e.target.value)}
+            placeholder="Say something…"
+            maxLength={200}
+            className="flex-1 border border-gray-200 rounded-full px-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+          />
+          <button type="submit" disabled={!chatText.trim()} className="brand-gradient text-white font-semibold px-4 py-1.5 rounded-full text-sm disabled:opacity-50">
+            Send
+          </button>
+        </form>
+        {chatError && <p className="text-xs text-red-500 px-3 pb-2">{chatError}</p>}
       </div>
 
       {/* Touch controls, mobile only */}
