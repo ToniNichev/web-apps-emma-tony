@@ -10,7 +10,7 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge' | 'kindness';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge' | 'kindness' | 'hangout';
 
 type Invite = {
   id: number;
@@ -42,6 +42,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const [challengeSaving, setChallengeSaving] = useState(false);
   const [challengeSaved, setChallengeSaved] = useState(false);
   const [kindnessReports, setKindnessReports] = useState<any[]>([]);
+  const [hangoutReports, setHangoutReports] = useState<any[]>([]);
   const bannerFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,6 +61,9 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     if (tab === 'kindness') {
       fetch('/api/admin/kindness').then(r => r.json()).then(setKindnessReports);
     }
+    if (tab === 'hangout') {
+      fetch('/api/admin/hangout-backgrounds').then(r => r.json()).then(setHangoutReports);
+    }
   }, [tab]);
 
   async function resolveKindnessReport(id: number, restore: boolean) {
@@ -69,6 +73,15 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
       body: JSON.stringify({ id, restore }),
     });
     setKindnessReports(rs => rs.filter(r => r.id !== id));
+  }
+
+  async function resolveHangoutReport(roomId: number, restore: boolean) {
+    await fetch('/api/admin/hangout-backgrounds', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: roomId, restore }),
+    });
+    setHangoutReports(rs => rs.filter(r => r.room_id !== roomId));
   }
 
   async function generateInvite() {
@@ -167,6 +180,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     { id: 'recap',   label: 'Recap',   emoji: '📊' },
     { id: 'challenge', label: 'Challenge', emoji: '🎯' },
     { id: 'kindness', label: 'Kindness', emoji: '💛' },
+    { id: 'hangout', label: 'Hangout', emoji: '🏡' },
   ];
 
   return (
@@ -692,6 +706,47 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                         className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition"
                       >
                         Delete permanently
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* ── Hangout tab ── */}
+      {tab === 'hangout' && (
+        <div className="space-y-4">
+          <div className="card p-6">
+            <p className="font-semibold text-gray-700 text-sm mb-1">Reported Hangout Backgrounds</p>
+            <p className="text-xs text-gray-400 mb-4">AI-generated backgrounds a room member flagged. Reverted to the default for everyone until you resolve it here.</p>
+
+            {hangoutReports.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No open reports 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {hangoutReports.map((r: any) => (
+                  <div key={r.room_id} className="border border-gray-100 rounded-xl p-4">
+                    {r.background_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.background_url} alt="" className="w-full max-h-48 object-cover rounded-lg mb-2" />
+                    )}
+                    <p className="text-xs text-gray-400">
+                      Room hosted by @{r.host_username} ({r.host_first_name})
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => resolveHangoutReport(r.room_id, true)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                      >
+                        Restore background
+                      </button>
+                      <button
+                        onClick={() => resolveHangoutReport(r.room_id, false)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition"
+                      >
+                        Remove background
                       </button>
                     </div>
                   </div>

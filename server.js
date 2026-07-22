@@ -119,6 +119,33 @@ app.prepare().then(() => {
       socket.to(`game:${room_id}`).emit('game:clear_canvas');
     });
 
+    // Hangout Room — pure relays. A client reports its own position; there is
+    // no secrecy/fairness problem with movement in a low-stakes shared space,
+    // so unlike game:draw_stroke there is no authorization check here.
+    // Decoration placement/removal and background changes are NOT raw socket
+    // events — they go through validated Next.js API routes (allowlist check,
+    // bounds check, host-only gate), which then push the resulting event via
+    // this same shared `io`, exactly like hangout:room_updated does below.
+    socket.on('hangout:join_room', ({ room_id }) => {
+      socket.join(`hangout:${room_id}`);
+    });
+    socket.on('hangout:leave_room', ({ room_id }) => {
+      socket.to(`hangout:${room_id}`).emit('hangout:user_left', { user_id: userId });
+      socket.leave(`hangout:${room_id}`);
+    });
+    socket.on('hangout:move', ({ room_id, x, y, facing }) => {
+      // Basic input hygiene, not anti-cheat: drop malformed payloads so they
+      // can't crash another client's render loop downstream.
+      if (typeof x !== 'number' || typeof y !== 'number') return;
+      // Include name/picture from the verified JWT so receiving clients never
+      // need to cross-reference a possibly-stale local player list to label
+      // a newly-joined mover.
+      socket.to(`hangout:${room_id}`).emit('hangout:move', {
+        user_id: userId, x, y, facing: facing ?? null, t: Date.now(),
+        first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
+      });
+    });
+
     socket.on('disconnect', () => {
       console.log(`[SOCKET] Disconnected: ${socket.user.username}`);
     });
