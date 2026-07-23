@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAppSocket } from '@/app/components/SocketProvider';
 import { HANGOUT_OBJECTS, ROOM_W, ROOM_H, BARRIER_RADIUS, emojiForType, type HangoutObjectType } from '@/app/lib/hangout-objects';
 import { defaultEmojiFor, defaultColorHexFor, colorHex } from '@/app/lib/avatar-options';
@@ -81,6 +83,7 @@ export default function HangoutRoomClient({
   initialRoom: RoomState;
 }) {
   const socket = useAppSocket();
+  const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
   const [me, setMe] = useState({ x: ROOM_W / 2, y: ROOM_H / 2 });
   const [objects, setObjects] = useState<RoomObject[]>(initialRoom.objects);
@@ -187,6 +190,7 @@ export default function HangoutRoomClient({
       });
     }
     function onRoomUpdated() { refreshRoom(); }
+    function onRoomDeleted() { router.push('/play/hangout'); }
     function onObjectPlaced(obj: RoomObject) {
       setObjects(os => [...os, obj]);
     }
@@ -215,6 +219,7 @@ export default function HangoutRoomClient({
     socket.on('hangout:move', onMove);
     socket.on('hangout:user_left', onUserLeft);
     socket.on('hangout:room_updated', onRoomUpdated);
+    socket.on('hangout:room_deleted', onRoomDeleted);
     socket.on('hangout:object_placed', onObjectPlaced);
     socket.on('hangout:object_removed', onObjectRemoved);
     socket.on('hangout:barrier_placed', onBarrierPlaced);
@@ -225,6 +230,7 @@ export default function HangoutRoomClient({
       socket.off('hangout:move', onMove);
       socket.off('hangout:user_left', onUserLeft);
       socket.off('hangout:room_updated', onRoomUpdated);
+      socket.off('hangout:room_deleted', onRoomDeleted);
       socket.off('hangout:object_placed', onObjectPlaced);
       socket.off('hangout:object_removed', onObjectRemoved);
       socket.off('hangout:barrier_placed', onBarrierPlaced);
@@ -425,6 +431,18 @@ export default function HangoutRoomClient({
     await fetch(`/api/hangout/rooms/${roomId}/report-background`, { method: 'POST' });
   }
 
+  async function leaveRoom() {
+    if (!confirm('Leave this room? You\'ll need a new invite from the host to come back.')) return;
+    const res = await fetch(`/api/hangout/rooms/${roomId}/leave`, { method: 'POST' });
+    if (res.ok) router.push('/play/hangout');
+  }
+
+  async function deleteRoom() {
+    if (!confirm('Delete this room for everyone? This removes the background, decorations, and blocked areas permanently.')) return;
+    const res = await fetch(`/api/hangout/rooms/${roomId}`, { method: 'DELETE' });
+    if (res.ok) router.push('/play/hangout');
+  }
+
   async function sendChat(e: React.FormEvent) {
     e.preventDefault();
     const text = chatText.trim();
@@ -524,7 +542,7 @@ export default function HangoutRoomClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold brand-text">Hangout Room 🏡</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           {isHost && (
             <button onClick={() => setShowBgPrompt(v => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition">
               🖼️ Background
@@ -540,9 +558,21 @@ export default function HangoutRoomClient({
               🚧 {barrierMode ? 'Done marking' : 'Block area'}
             </button>
           )}
+          <Link href="/settings#hangout-avatar" className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition">
+            🎨 My Avatar
+          </Link>
           <button onClick={reportBackground} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition">
             🚩 Report
           </button>
+          {isHost ? (
+            <button onClick={deleteRoom} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition">
+              🗑️ Delete room
+            </button>
+          ) : (
+            <button onClick={leaveRoom} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition">
+              🚪 Leave
+            </button>
+          )}
         </div>
       </div>
 

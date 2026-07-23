@@ -56,3 +56,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     my_status: me.status,
   });
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  const { id } = await params;
+  const roomId = Number(id);
+
+  const [roomRows] = await db.execute('SELECT created_by FROM hangout_rooms WHERE id = ?', [roomId]) as any[];
+  const room = (roomRows as any[])[0];
+  if (!room) return NextResponse.json({ message: 'Room not found' }, { status: 404 });
+  if (room.created_by !== session.id) {
+    return NextResponse.json({ message: 'Only the host can delete this room' }, { status: 403 });
+  }
+
+  const io = (globalThis as unknown as { __gameIO?: any }).__gameIO;
+  io?.to(`hangout:${roomId}`).emit('hangout:room_deleted');
+
+  // Cascades to players/objects/barriers/reports via their FK constraints.
+  await db.execute('DELETE FROM hangout_rooms WHERE id = ?', [roomId]);
+
+  return NextResponse.json({ ok: true });
+}

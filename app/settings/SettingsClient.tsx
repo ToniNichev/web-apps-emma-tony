@@ -301,7 +301,7 @@ export default function SettingsClient({ user }: Props) {
       </div>
 
       {/* Hangout Room avatar */}
-      <div className="card p-6">
+      <div id="hangout-avatar" className="card p-6 scroll-mt-20">
         <h2 className="font-bold text-lg mb-1">Hangout Room Avatar</h2>
         <p className="text-sm text-gray-400 mb-5">Pick how you look when you&apos;re hanging out with friends.</p>
 
