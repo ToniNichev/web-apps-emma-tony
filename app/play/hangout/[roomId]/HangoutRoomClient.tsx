@@ -70,6 +70,42 @@ interface SpeechBubble {
   expiresAt: number;
 }
 
+function isPointBlocked(x: number, y: number, obstacles: { x: number; y: number; radius: number }[]): boolean {
+  return obstacles.some(o => Math.hypot(x - o.x, y - o.y) < AVATAR_RADIUS + o.radius);
+}
+
+// Spawning doesn't go through collision checking (it's a starting position,
+// not a "move"), so a player CAN legitimately spawn inside a barrier/object
+// if the room's center happens to be marked. They'd never actually get
+// trapped there — walking any direction is always allowed out of an
+// obstacle you're already inside — but it looks odd for a moment. Pick a
+// clear spot up front instead: default to dead center, and only search
+// outward in expanding rings if that exact point turns out to be blocked.
+function findSpawnPoint(objects: RoomObject[], barriers: Barrier[]): { x: number; y: number } {
+  const obstacles = [
+    ...objects.map(o => ({ x: o.x, y: o.y, radius: OBJECT_RADIUS })),
+    ...barriers.map(b => ({ x: b.x, y: b.y, radius: BARRIER_RADIUS })),
+  ];
+  const centerX = ROOM_W / 2;
+  const centerY = ROOM_H / 2;
+  if (obstacles.length === 0 || !isPointBlocked(centerX, centerY, obstacles)) {
+    return { x: centerX, y: centerY };
+  }
+
+  const STEP = 20;
+  const MAX_RADIUS = Math.max(ROOM_W, ROOM_H);
+  for (let radius = STEP; radius <= MAX_RADIUS; radius += STEP) {
+    const angleStep = STEP / radius; // keeps points roughly evenly spaced along each ring
+    for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+      const x = Math.round(centerX + Math.cos(angle) * radius);
+      const y = Math.round(centerY + Math.sin(angle) * radius);
+      if (x < AVATAR_RADIUS || x > ROOM_W - AVATAR_RADIUS || y < AVATAR_RADIUS || y > ROOM_H - AVATAR_RADIUS) continue;
+      if (!isPointBlocked(x, y, obstacles)) return { x, y };
+    }
+  }
+  return { x: centerX, y: centerY }; // exceptionally unlikely fallback if the whole room is somehow blocked
+}
+
 const BUBBLE_DURATION_MS = 4000;
 const BUBBLE_MAX_CHARS = 50;
 
@@ -85,7 +121,7 @@ export default function HangoutRoomClient({
   const socket = useAppSocket();
   const router = useRouter();
   const [room, setRoom] = useState(initialRoom);
-  const [me, setMe] = useState({ x: ROOM_W / 2, y: ROOM_H / 2 });
+  const [me, setMe] = useState(() => findSpawnPoint(initialRoom.objects, initialRoom.barriers));
   const [objects, setObjects] = useState<RoomObject[]>(initialRoom.objects);
   const [barriers, setBarriers] = useState<Barrier[]>(initialRoom.barriers);
   const [barrierMode, setBarrierMode] = useState(false);
