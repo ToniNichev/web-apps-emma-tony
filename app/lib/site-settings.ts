@@ -10,6 +10,7 @@ export interface SiteSettings {
   banner_bg: string;
   luna_name: string;
   luna_persona: string;
+  maintenance_mode: string;
 }
 
 export const DEFAULT_LUNA_PERSONA = 'You love talking about art, animals, music, creative stories, fun facts, jokes, and games like 20 questions or would-you-rather. Be encouraging, upbeat, and use emojis naturally but not excessively.';
@@ -28,5 +29,6 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     banner_bg:      map.banner_bg      || 'none',
     luna_name:      map.luna_name      || 'Luna',
     luna_persona:   map.luna_persona   || DEFAULT_LUNA_PERSONA,
+    maintenance_mode: map.maintenance_mode || '0',
   };
 }

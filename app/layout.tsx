@@ -33,10 +33,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   ].filter(Boolean).join(' ');
 
   let siteName = "Emma's Space";
+  let maintenanceMode = false;
   try {
     const s = await getSiteSettings();
     siteName = s.site_name || siteName;
+    maintenanceMode = s.maintenance_mode === '1';
   } catch {}
+
+  if (maintenanceMode && !session?.is_admin) {
+    return (
+      <html lang="en" className={classes || undefined}>
+        <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased`}>
+          <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50">
+            <div className="text-7xl mb-4">🌙💤✨</div>
+            <h1 className="text-2xl font-bold brand-text mb-2">Taking a little break!</h1>
+            <p className="text-gray-500 max-w-sm">{siteName} is temporarily closed for some updates. Check back soon! 💕</p>
+          </div>
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="en" className={classes || undefined}>
