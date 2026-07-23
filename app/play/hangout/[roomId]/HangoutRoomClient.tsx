@@ -70,6 +70,14 @@ interface SpeechBubble {
   expiresAt: number;
 }
 
+interface Friend {
+  id: number;
+  first_name: string;
+  profile_picture: string | null;
+}
+
+const MAX_PLAYERS = 6; // host + up to 5 others
+
 function isPointBlocked(x: number, y: number, obstacles: { x: number; y: number; radius: number }[]): boolean {
   return obstacles.some(o => Math.hypot(x - o.x, y - o.y) < AVATAR_RADIUS + o.radius);
 }
@@ -112,11 +120,12 @@ const BUBBLE_MAX_CHARS = 50;
 const MAX_CHAT_MESSAGES = 50;
 
 export default function HangoutRoomClient({
-  roomId, currentUserId, initialRoom,
+  roomId, currentUserId, initialRoom, friends,
 }: {
   roomId: number;
   currentUserId: number;
   initialRoom: RoomState;
+  friends: Friend[];
 }) {
   const socket = useAppSocket();
   const router = useRouter();
@@ -133,6 +142,10 @@ export default function HangoutRoomClient({
   const [bgGenerating, setBgGenerating] = useState(false);
   const [bgProgress, setBgProgress] = useState(0);
   const [bgError, setBgError] = useState<string | null>(null);
+  const [showInvitePrompt, setShowInvitePrompt] = useState(false);
+  const [inviteSelected, setInviteSelected] = useState<Set<number>>(new Set());
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [bubbles, setBubbles] = useState<Map<number, SpeechBubble>>(() => new Map());
   const [chatText, setChatText] = useState('');
@@ -151,6 +164,9 @@ export default function HangoutRoomClient({
   const heldKeys = useRef(new Set<string>());
   const lastSentAt = useRef(0);
   const isHost = room.host_id === currentUserId;
+  const activeCount = room.players.filter(p => p.status !== 'left').length;
+  const roomMemberIds = new Set(room.players.filter(p => p.status !== 'left').map(p => p.user_id));
+  const availableFriends = friends.filter(f => !roomMemberIds.has(f.id));
 
   function currentRenderPos(p: OtherPlayer) {
     const t = Math.min(1, (now - p.startTs) / INTERP_MS);
@@ -477,6 +493,34 @@ export default function HangoutRoomClient({
     await fetch(`/api/hangout/rooms/${roomId}/report-background`, { method: 'POST' });
   }
 
+  function toggleInvitee(id: number) {
+    setInviteSelected(s => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function inviteMore() {
+    if (inviteSelected.size === 0) return;
+    setInviting(true);
+    setInviteError(null);
+    const res = await fetch(`/api/hangout/rooms/${roomId}/invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite_user_ids: [...inviteSelected] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setInviting(false);
+    if (res.ok) {
+      setShowInvitePrompt(false);
+      setInviteSelected(new Set());
+      refreshRoom();
+    } else {
+      setInviteError(data.message || 'Something went wrong');
+    }
+  }
+
   async function leaveRoom() {
     if (!confirm('Leave this room? You\'ll need a new invite from the host to come back.')) return;
     const res = await fetch(`/api/hangout/rooms/${roomId}/leave`, { method: 'POST' });
@@ -610,6 +654,15 @@ export default function HangoutRoomClient({
               )}
               {isHost && (
                 <button
+                  onClick={() => { setShowInvitePrompt(v => !v); setMenuOpen(false); }}
+                  disabled={activeCount >= MAX_PLAYERS}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <span>➕</span> {activeCount >= MAX_PLAYERS ? 'Invite more (room full)' : 'Invite more people'}
+                </button>
+              )}
+              {isHost && (
+                <button
                   onClick={() => { setBarrierMode(v => !v); setSelectedObject(null); setMenuOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
                 >
@@ -668,6 +721,55 @@ export default function HangoutRoomClient({
           </div>
           {bgError && <p className="text-xs text-red-500">{bgError}</p>}
         </form>
+      )}
+
+      {showInvitePrompt && (
+        <div className="card p-4 space-y-3">
+          <p className="text-xs text-gray-500">
+            Invite friends (mutual followers only) — {MAX_PLAYERS - activeCount} spot{MAX_PLAYERS - activeCount === 1 ? '' : 's'} left
+          </p>
+          {availableFriends.length === 0 ? (
+            <p className="text-sm text-gray-400">No friends available to invite right now.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {availableFriends.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => toggleInvitee(f.id)}
+                  disabled={!inviteSelected.has(f.id) && inviteSelected.size >= MAX_PLAYERS - activeCount}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm transition disabled:opacity-40 ${
+                    inviteSelected.has(f.id)
+                      ? 'bg-purple-100 border-purple-300 text-purple-700'
+                      : 'border-gray-200 text-gray-600 hover:border-purple-200'
+                  }`}
+                >
+                  <span className="w-5 h-5 rounded-full brand-gradient flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0">
+                    {f.profile_picture
+                      ? <img src={f.profile_picture} alt="" className="w-full h-full object-cover" />
+                      : f.first_name[0]}
+                  </span>
+                  {f.first_name}
+                </button>
+              ))}
+            </div>
+          )}
+          {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowInvitePrompt(false); setInviteSelected(new Set()); setInviteError(null); }}
+              className="text-sm font-semibold px-4 py-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={inviteMore}
+              disabled={inviteSelected.size === 0 || inviting}
+              className="ml-auto brand-gradient text-white font-semibold px-5 py-2 rounded-full text-sm hover:opacity-90 transition disabled:opacity-50"
+            >
+              {inviting ? 'Inviting…' : `Invite (${inviteSelected.size})`}
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="card overflow-hidden">

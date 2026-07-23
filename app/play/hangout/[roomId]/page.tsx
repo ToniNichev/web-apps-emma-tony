@@ -44,11 +44,24 @@ export default async function HangoutRoomPage({ params }: { params: Promise<{ ro
 
   const effectiveBackgroundUrl = room.background_status === 'reported' ? null : room.background_url;
 
+  const isHost = room.created_by === session.id;
+  const [friendRows] = isHost
+    ? await db.execute(
+        `SELECT u.id, u.first_name, u.profile_picture
+         FROM users u
+         JOIN follows f1 ON f1.follower_id = ? AND f1.following_id = u.id
+         JOIN follows f2 ON f2.follower_id = u.id AND f2.following_id = ?
+         ORDER BY u.first_name ASC`,
+        [session.id, session.id]
+      ) as any[]
+    : [[]];
+
   return (
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-8">
       <HangoutRoomClient
         roomId={Number(roomId)}
         currentUserId={session.id}
+        friends={friendRows}
         initialRoom={{
           id: room.id,
           host_id: room.created_by,
