@@ -58,6 +58,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ message: 'Avatar updated' });
   }
 
+  if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    return NextResponse.json({ message: 'Invalid birthday format' }, { status: 400 });
+  }
+
   await db.execute(
     `UPDATE users SET first_name = ?, last_name = ?, bio = ?, profile_picture = ?,
       now_playing_song = ?, now_playing_artist = ?, birthday = ? WHERE id = ?`,
