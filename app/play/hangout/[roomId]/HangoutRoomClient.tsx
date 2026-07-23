@@ -783,12 +783,12 @@ function Avatar({ emoji, color, accessory, size }: { emoji: string; color: strin
 function SpeechBubble({ text }: { text: string }) {
   return (
     <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 max-w-[140px] pointer-events-none">
-      <div className="bg-white text-slate-800 text-[11px] leading-snug px-2.5 py-1.5 rounded-xl shadow-md text-center break-words">
+      <div className="bg-white/90 text-slate-800 text-[11px] leading-snug px-2.5 py-1.5 rounded-xl shadow-md text-center break-words">
         {text}
       </div>
       <div
         className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
-        style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid white' }}
+        style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid rgba(255,255,255,0.9)' }}
       />
     </div>
   );
