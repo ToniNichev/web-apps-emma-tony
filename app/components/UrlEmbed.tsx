@@ -65,6 +65,7 @@ type SafetyState =
 function YouTubeCard({ id, url }: { id: string; url: string }) {
   const [safety, setSafety] = useState<SafetyState>({ status: 'loading' });
   const [playing, setPlaying] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,11 +121,20 @@ function YouTubeCard({ id, url }: { id: string; url: string }) {
                 className="absolute inset-0 w-full h-full group"
                 aria-label="Play video"
               >
-                <img
-                  src={thumbnail}
-                  alt={safety.title || 'YouTube video thumbnail'}
-                  className="w-full h-full object-cover"
-                />
+                {thumbFailed ? (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                    <svg viewBox="0 0 24 24" className="w-10 h-10 fill-gray-500">
+                      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/>
+                    </svg>
+                  </div>
+                ) : (
+                  <img
+                    src={thumbnail}
+                    alt={safety.title || 'YouTube video thumbnail'}
+                    className="w-full h-full object-cover"
+                    onError={() => setThumbFailed(true)}
+                  />
+                )}
                 <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/30 transition">
                   <div className="w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                     <svg viewBox="0 0 24 24" className="w-8 h-8 fill-white ml-1">

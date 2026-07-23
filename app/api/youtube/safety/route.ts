@@ -184,7 +184,10 @@ export async function GET(request: NextRequest) {
   // Only categories with a narrow, consistently low-risk content profile skip AI
   // review. Categories like Music, Gaming, and Film & Animation vary too widely
   // (explicit music videos, M-rated gameplay, etc.) to auto-approve by label alone.
-  if (meta.category && meta.madeForKids !== false) {
+  // `madeForKids: false` is a legal/monetization designation creators set by
+  // default on most channels — it doesn't signal unsafe content, so it's not
+  // used to gate this category-based shortcut.
+  if (meta.category) {
     const safeCategoryNames = ['Education', 'Pets & Animals', 'Howto & Style', 'Science & Technology'];
     if (safeCategoryNames.includes(meta.category)) {
       return NextResponse.json<SafetyResult>({
