@@ -63,6 +63,14 @@ interface ChatMessage {
   t: number;
 }
 
+interface SpeechBubble {
+  text: string;
+  expiresAt: number;
+}
+
+const BUBBLE_DURATION_MS = 4000;
+const BUBBLE_MAX_CHARS = 50;
+
 const MAX_CHAT_MESSAGES = 50;
 
 export default function HangoutRoomClient({
@@ -87,6 +95,7 @@ export default function HangoutRoomClient({
   const [bgProgress, setBgProgress] = useState(0);
   const [bgError, setBgError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [bubbles, setBubbles] = useState<Map<number, SpeechBubble>>(() => new Map());
   const [chatText, setChatText] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -124,6 +133,15 @@ export default function HangoutRoomClient({
       color: colorHex(p?.avatar_color) || defaultColorHexFor(userId),
       accessory: p?.avatar_accessory || null,
     };
+  }
+
+  // `now` already ticks every animation frame (for movement interpolation),
+  // so an expired bubble simply stops being returned here — no separate
+  // timer/cleanup needed to make it disappear.
+  function bubbleFor(userId: number): string | null {
+    const b = bubbles.get(userId);
+    if (!b || now >= b.expiresAt) return null;
+    return b.text;
   }
 
   const refreshRoom = useCallback(async () => {
@@ -186,6 +204,12 @@ export default function HangoutRoomClient({
     }
     function onChat(msg: ChatMessage) {
       setMessages(ms => [...ms, msg].slice(-MAX_CHAT_MESSAGES));
+      const truncated = msg.text.length > BUBBLE_MAX_CHARS ? msg.text.slice(0, BUBBLE_MAX_CHARS - 1) + '…' : msg.text;
+      setBubbles(prev => {
+        const next = new Map(prev);
+        next.set(msg.user_id, { text: truncated, expiresAt: Date.now() + BUBBLE_DURATION_MS });
+        return next;
+      });
     }
 
     socket.on('hangout:move', onMove);
@@ -464,6 +488,7 @@ export default function HangoutRoomClient({
           className="absolute flex flex-col items-center"
           style={{ left: `${(me.x / ROOM_W) * 100}%`, top: `${(me.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(me.y) }}
         >
+          {bubbleFor(currentUserId) && <SpeechBubble text={bubbleFor(currentUserId)!} />}
           <Avatar {...avatarPropsFor(currentUserId)} size={AVATAR_SIZE} />
           <span className="text-[10px] text-slate-800 bg-white/80 px-1.5 rounded-full mt-0.5">You</span>
         </div>
@@ -481,6 +506,7 @@ export default function HangoutRoomClient({
             className="absolute flex flex-col items-center transition-opacity"
             style={{ left: `${(pos.x / ROOM_W) * 100}%`, top: `${(pos.y / ROOM_H) * 100}%`, transform: 'translate(-50%, -50%)', zIndex: Math.round(pos.y), opacity }}
           >
+            {bubbleFor(uid) && <SpeechBubble text={bubbleFor(uid)!} />}
             <Avatar {...avatarPropsFor(uid)} size={AVATAR_SIZE} />
             <span className="text-[10px] text-slate-800 bg-white/80 px-1.5 rounded-full mt-0.5">{p.first_name}</span>
           </div>
@@ -641,6 +667,20 @@ function Avatar({ emoji, color, accessory, size }: { emoji: string; color: strin
       {accessory && (
         <span className="absolute -top-1 -right-1" style={{ fontSize: size * 0.4 }}>{accessory}</span>
       )}
+    </div>
+  );
+}
+
+function SpeechBubble({ text }: { text: string }) {
+  return (
+    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 max-w-[140px] pointer-events-none">
+      <div className="bg-white text-slate-800 text-[11px] leading-snug px-2.5 py-1.5 rounded-xl shadow-md text-center break-words">
+        {text}
+      </div>
+      <div
+        className="absolute left-1/2 -translate-x-1/2 w-0 h-0"
+        style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid white' }}
+      />
     </div>
   );
 }
