@@ -262,20 +262,24 @@ export default function HangoutRoomClient({
     ];
   }, [objects, barriers]);
 
-  // Compares distance-to-obstacle at the current vs. proposed position, not
-  // just an absolute radius check — a pure radius check can permanently trap
-  // a player if an obstacle ever ends up on top of them (a decoration placed
-  // right where they're standing, an unlucky spawn, or a barrier drawn under
-  // someone already there). Every incremental step "away" would otherwise
-  // still land inside the radius and get rejected forever. Comparing to the
-  // current distance means moving away is always allowed.
+  // An obstacle the player is already inside never blocks them, full stop —
+  // it doesn't just require "moving away" from that one obstacle. That
+  // matters because a real roped-off area is several overlapping barrier
+  // circles: moving away from the one you're centered in can simultaneously
+  // move you closer to an adjacent overlapping one, and since any single
+  // blocking obstacle vetoes the move, a "must move away from each" rule can
+  // still trap a player in the overlap between circles. Ignoring obstacles
+  // already touching them means every circle they're inside stops mattering
+  // until they clear it, so walking any consistent direction always
+  // eventually escapes the whole roped-off blob. Only obstacles they're NOT
+  // currently touching block new entry.
   function blockedByObstacle(fromX: number, fromY: number, toX: number, toY: number): boolean {
     return obstaclesRef.current.some(o => {
       const combined = AVATAR_RADIUS + o.radius;
       const distFrom = Math.hypot(fromX - o.x, fromY - o.y);
+      if (distFrom < combined) return false;
       const distTo = Math.hypot(toX - o.x, toY - o.y);
-      if (distFrom >= combined) return distTo < combined;
-      return distTo < distFrom;
+      return distTo < combined;
     });
   }
 
