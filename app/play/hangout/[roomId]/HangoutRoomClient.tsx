@@ -178,10 +178,16 @@ export default function HangoutRoomClient({
     return { x: p.fromX + (p.toX - p.fromX) * t, y: p.fromY + (p.toY - p.fromY) * t };
   }
 
+  // hangout:user_left now fires reliably on both explicit leave and
+  // disconnect (server.js tracks per-socket room membership for cleanup), so
+  // this fade is just a safety net for edge cases like a server restart —
+  // not the primary way a departed player disappears. It used to double as
+  // that primary mechanism with an 8-15s window, which meant anyone who
+  // simply stood still to chat silently faded out for everyone else.
   function opacityFor(p: OtherPlayer) {
     const age = now - p.lastUpdateTs;
-    if (age < 8000) return 1;
-    if (age < 15000) return 1 - (age - 8000) / 7000;
+    if (age < 60000) return 1;
+    if (age < 90000) return 1 - (age - 60000) / 30000;
     return 0;
   }
 
@@ -248,6 +254,23 @@ export default function HangoutRoomClient({
         return next;
       });
     }
+    // Sent once, right after hangout:join_room, with everyone already in the
+    // room — without it, a stationary player (e.g. mid-chat) stays invisible
+    // to anyone who joins after them, since hangout:move only fires on
+    // movement.
+    function onRoomSnapshot(list: { user_id: number; x: number; y: number; first_name: string; profile_picture: string | null }[]) {
+      setOthers(prev => {
+        const next = new Map(prev);
+        for (const p of list) {
+          next.set(p.user_id, {
+            fromX: p.x, fromY: p.y, toX: p.x, toY: p.y,
+            startTs: Date.now(), lastUpdateTs: Date.now(),
+            first_name: p.first_name, profile_picture: p.profile_picture,
+          });
+        }
+        return next;
+      });
+    }
     function onRoomUpdated() { refreshRoom(); }
     function onRoomDeleted() { router.push('/play/hangout'); }
     function onObjectPlaced(obj: RoomObject) {
@@ -277,6 +300,7 @@ export default function HangoutRoomClient({
 
     socket.on('hangout:move', onMove);
     socket.on('hangout:user_left', onUserLeft);
+    socket.on('hangout:room_snapshot', onRoomSnapshot);
     socket.on('hangout:room_updated', onRoomUpdated);
     socket.on('hangout:room_deleted', onRoomDeleted);
     socket.on('hangout:object_placed', onObjectPlaced);
@@ -288,6 +312,7 @@ export default function HangoutRoomClient({
     return () => {
       socket.off('hangout:move', onMove);
       socket.off('hangout:user_left', onUserLeft);
+      socket.off('hangout:room_snapshot', onRoomSnapshot);
       socket.off('hangout:room_updated', onRoomUpdated);
       socket.off('hangout:room_deleted', onRoomDeleted);
       socket.off('hangout:object_placed', onObjectPlaced);

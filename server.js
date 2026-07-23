@@ -55,9 +55,18 @@ app.prepare().then(() => {
     }
   });
 
+  // Hangout Room presence: roomId -> Map<userId, {x,y,facing,first_name,profile_picture}>.
+  // hangout:move is a pure relay with no server-side memory, so a client that
+  // joins a room only learns where OTHER players are once those players next
+  // move — someone standing still (e.g. chatting) stays invisible to anyone
+  // who joins after them. Tracking last-known position here lets a joining
+  // client be sent an immediate snapshot instead of waiting on movement.
+  const hangoutPresence = new Map();
+
   io.on('connection', (socket) => {
     const userId = socket.user.id;
     socket.join(`user:${userId}`);
+    socket.hangoutRooms = new Set();
     console.log(`[SOCKET] Connected: ${socket.user.username} (id:${userId}) via ${socket.conn.transport.name}`);
 
     socket.on('send_message', ({ to_user_id, conversation_id, content }) => {
@@ -128,10 +137,20 @@ app.prepare().then(() => {
     // this same shared `io`, exactly like hangout:room_updated does below.
     socket.on('hangout:join_room', ({ room_id }) => {
       socket.join(`hangout:${room_id}`);
+      socket.hangoutRooms.add(room_id);
+      const present = hangoutPresence.get(room_id);
+      if (present && present.size > 0) {
+        const snapshot = [...present.entries()]
+          .filter(([uid]) => uid !== userId)
+          .map(([uid, p]) => ({ user_id: uid, ...p }));
+        if (snapshot.length > 0) socket.emit('hangout:room_snapshot', snapshot);
+      }
     });
     socket.on('hangout:leave_room', ({ room_id }) => {
       socket.to(`hangout:${room_id}`).emit('hangout:user_left', { user_id: userId });
       socket.leave(`hangout:${room_id}`);
+      socket.hangoutRooms.delete(room_id);
+      hangoutPresence.get(room_id)?.delete(userId);
     });
     socket.on('hangout:move', ({ room_id, x, y, facing }) => {
       // Basic input hygiene, not anti-cheat: drop malformed payloads so they
@@ -140,14 +159,28 @@ app.prepare().then(() => {
       // Include name/picture from the verified JWT so receiving clients never
       // need to cross-reference a possibly-stale local player list to label
       // a newly-joined mover.
+      const facingVal = facing ?? null;
+      if (!hangoutPresence.has(room_id)) hangoutPresence.set(room_id, new Map());
+      hangoutPresence.get(room_id).set(userId, {
+        x, y, facing: facingVal,
+        first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
+      });
       socket.to(`hangout:${room_id}`).emit('hangout:move', {
-        user_id: userId, x, y, facing: facing ?? null, t: Date.now(),
+        user_id: userId, x, y, facing: facingVal, t: Date.now(),
         first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
       });
     });
 
     socket.on('disconnect', () => {
       console.log(`[SOCKET] Disconnected: ${socket.user.username}`);
+      // hangout:leave_room only fires on an explicit "Leave room" click —
+      // closing the tab or losing connection never sends it, so without this
+      // the player's avatar would just sit there for other clients until the
+      // opacity fade eventually hides it.
+      for (const room_id of socket.hangoutRooms) {
+        hangoutPresence.get(room_id)?.delete(userId);
+        socket.to(`hangout:${room_id}`).emit('hangout:user_left', { user_id: userId });
+      }
     });
   });
 
