@@ -102,6 +102,8 @@ export default function HangoutRoomClient({
   const [chatText, setChatText] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const [others, setOthers] = useState<Map<number, OtherPlayer>>(() => new Map());
   // `now` is the single tick driving both interpolation and presence-fade math
@@ -292,6 +294,14 @@ export default function HangoutRoomClient({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     if (room.my_status !== 'joined') return;
@@ -542,36 +552,65 @@ export default function HangoutRoomClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold brand-text">Hangout Room 🏡</h1>
-        <div className="flex flex-wrap justify-end gap-2">
-          {isHost && (
-            <button onClick={() => setShowBgPrompt(v => !v)} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition">
-              🖼️ Background
-            </button>
-          )}
-          {isHost && (
-            <button
-              onClick={() => { setBarrierMode(v => !v); setSelectedObject(null); }}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${
-                barrierMode ? 'bg-amber-100 text-amber-700 ring-2 ring-amber-300' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-              }`}
-            >
-              🚧 {barrierMode ? 'Done marking' : 'Block area'}
-            </button>
-          )}
-          <Link href="/settings#hangout-avatar" className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition">
-            🎨 My Avatar
-          </Link>
-          <button onClick={reportBackground} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition">
-            🚩 Report
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            className={`relative p-2 rounded-full transition ${barrierMode ? 'bg-amber-100 text-amber-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}
+            title="Room options"
+          >
+            ⚙️
+            {barrierMode && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500" />}
           </button>
-          {isHost ? (
-            <button onClick={deleteRoom} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition">
-              🗑️ Delete room
-            </button>
-          ) : (
-            <button onClick={leaveRoom} className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition">
-              🚪 Leave
-            </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-11 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-50">
+              {isHost && (
+                <button
+                  onClick={() => { setShowBgPrompt(v => !v); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                >
+                  <span>🖼️</span> Change background
+                </button>
+              )}
+              {isHost && (
+                <button
+                  onClick={() => { setBarrierMode(v => !v); setSelectedObject(null); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+                >
+                  <span>🚧</span> {barrierMode ? 'Done marking area' : 'Block area'}
+                </button>
+              )}
+              <Link
+                href="/settings#hangout-avatar"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+              >
+                <span>🎨</span> My avatar
+              </Link>
+              <button
+                onClick={() => { setMenuOpen(false); reportBackground(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition text-left"
+              >
+                <span>🚩</span> Report background
+              </button>
+              <div className="border-t border-gray-50 mt-1 pt-1">
+                {isHost ? (
+                  <button
+                    onClick={() => { setMenuOpen(false); deleteRoom(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition text-left"
+                  >
+                    <span>🗑️</span> Delete room
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setMenuOpen(false); leaveRoom(); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition text-left"
+                  >
+                    <span>🚪</span> Leave room
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
