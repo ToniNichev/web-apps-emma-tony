@@ -168,8 +168,13 @@ export default function HangoutRoomClient({
   const roomMemberIds = new Set(room.players.filter(p => p.status !== 'left').map(p => p.user_id));
   const availableFriends = friends.filter(f => !roomMemberIds.has(f.id));
 
-  function currentRenderPos(p: OtherPlayer) {
-    const t = Math.min(1, (now - p.startTs) / INTERP_MS);
+  // Accepts an explicit timestamp (defaulting to the ticking `now` state used
+  // during render) rather than always reading `now` directly, because the
+  // socket move handler below is set up once in a useEffect whose deps don't
+  // include `now` — its closure would otherwise see a permanently stale
+  // value from mount time and produce garbage interpolation.
+  function currentRenderPos(p: OtherPlayer, atTime: number = now) {
+    const t = Math.min(1, (atTime - p.startTs) / INTERP_MS);
     return { x: p.fromX + (p.toX - p.fromX) * t, y: p.fromY + (p.toY - p.fromY) * t };
   }
 
@@ -226,7 +231,7 @@ export default function HangoutRoomClient({
       setOthers(prev => {
         const next = new Map(prev);
         const existing = next.get(data.user_id);
-        const from = existing ? currentRenderPos(existing) : { x: data.x, y: data.y };
+        const from = existing ? currentRenderPos(existing, Date.now()) : { x: data.x, y: data.y };
         next.set(data.user_id, {
           fromX: from.x, fromY: from.y, toX: data.x, toY: data.y,
           startTs: Date.now(), lastUpdateTs: Date.now(),
