@@ -4,6 +4,14 @@ export const HANGOUT_OBJECTS = [
   { type: 'lamp', emoji: '💡', label: 'Lamp' },
   { type: 'fountain', emoji: '⛲', label: 'Fountain' },
   { type: 'tent', emoji: '🎪', label: 'Tent' },
+  { type: 'couch', emoji: '🛋️', label: 'Couch' },
+  { type: 'campfire', emoji: '🔥', label: 'Campfire' },
+  { type: 'plant', emoji: '🪴', label: 'Potted plant' },
+  { type: 'teddy', emoji: '🧸', label: 'Teddy bear' },
+  { type: 'bookshelf', emoji: '📚', label: 'Bookshelf' },
+  { type: 'easel', emoji: '🎨', label: 'Easel' },
+  { type: 'flowers', emoji: '🌷', label: 'Flower bed' },
+  { type: 'pinata', emoji: '🪅', label: 'Piñata' },
 ] as const;
 
 export type HangoutObjectType = typeof HANGOUT_OBJECTS[number]['type'];
