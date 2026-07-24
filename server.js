@@ -111,8 +111,21 @@ app.prepare().then(() => {
     // drawing) lives in app/lib/draw-guess.ts, written by the Next.js API
     // routes that own the actual game logic; this just checks the sender's
     // JWT-verified identity against it before re-broadcasting.
+    //
+    // Strokes themselves were pure relay too (no server memory), so anyone
+    // who joined mid-round, refreshed, or reconnected saw a blank canvas and
+    // only picked up strokes drawn after they (re)connected — the drawing
+    // looked like it was arriving "late" or missing entirely. gameStrokes
+    // keeps the current round's strokes in memory (shared with
+    // app/lib/draw-guess.ts via globalThis, which clears it on each new
+    // round) so a joining client can be replayed the round so far.
+    if (!globalThis.__gameStrokes) globalThis.__gameStrokes = new Map();
+    const gameStrokes = globalThis.__gameStrokes;
+
     socket.on('game:join_room', ({ room_id }) => {
       socket.join(`game:${room_id}`);
+      const history = gameStrokes.get(room_id);
+      if (history && history.length > 0) socket.emit('game:stroke_history', { strokes: history });
     });
     socket.on('game:leave_room', ({ room_id }) => {
       socket.leave(`game:${room_id}`);
@@ -120,11 +133,14 @@ app.prepare().then(() => {
     socket.on('game:draw_stroke', ({ room_id, stroke }) => {
       const state = globalThis.__gameRoomState?.get(room_id);
       if (!state || state.drawerId !== userId) return;
+      if (!gameStrokes.has(room_id)) gameStrokes.set(room_id, []);
+      gameStrokes.get(room_id).push(stroke);
       socket.to(`game:${room_id}`).emit('game:draw_stroke', { stroke });
     });
     socket.on('game:clear_canvas', ({ room_id }) => {
       const state = globalThis.__gameRoomState?.get(room_id);
       if (!state || state.drawerId !== userId) return;
+      gameStrokes.set(room_id, []);
       socket.to(`game:${room_id}`).emit('game:clear_canvas');
     });
 

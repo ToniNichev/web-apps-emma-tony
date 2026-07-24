@@ -106,6 +106,13 @@ export default function DrawGuessRoomClient({
     function onClear() {
       clearCanvas();
     }
+    // Sent once, right after game:join_room, with everything drawn so far
+    // this round — without it, joining mid-round (or refreshing/reconnecting)
+    // left the canvas blank until the drawer's next stroke.
+    function onStrokeHistory({ strokes }: { strokes: Stroke[] }) {
+      clearCanvas();
+      for (const stroke of strokes) applyStroke(stroke);
+    }
     function onRoomUpdated() {
       refreshRoom();
     }
@@ -116,6 +123,7 @@ export default function DrawGuessRoomClient({
     socket.on('game:guess', onGuess);
     socket.on('game:draw_stroke', onDrawStroke);
     socket.on('game:clear_canvas', onClear);
+    socket.on('game:stroke_history', onStrokeHistory);
     socket.on('game:room_updated', onRoomUpdated);
     return () => {
       socket.off('game:round_started', onRoundStarted);
@@ -124,6 +132,7 @@ export default function DrawGuessRoomClient({
       socket.off('game:guess', onGuess);
       socket.off('game:draw_stroke', onDrawStroke);
       socket.off('game:clear_canvas', onClear);
+      socket.off('game:stroke_history', onStrokeHistory);
       socket.off('game:room_updated', onRoomUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

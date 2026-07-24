@@ -61,6 +61,12 @@ export async function startNextRound(roomId: number) {
   }, ROUND_MS);
   stateMap().set(roomId, { drawerId: nextDrawerId, word, timer });
 
+  // Clear last round's strokes (shared with server.js's socket handlers via
+  // globalThis) so a client joining this new round doesn't get replayed the
+  // previous drawing before anything's actually been drawn.
+  const g = globalThis as unknown as { __gameStrokes?: Map<number, unknown[]> };
+  g.__gameStrokes?.set(roomId, []);
+
   const io = gameIO();
   if (io) {
     io.to(`game:${roomId}`).emit('game:round_started', { round: nextRound, drawer_id: nextDrawerId, deadline });
