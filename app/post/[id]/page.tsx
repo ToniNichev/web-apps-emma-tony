@@ -18,8 +18,9 @@ export default async function PostPage({ params }: { params: Promise<{ id: strin
       (SELECT emoji FROM likes l WHERE l.post_id = p.id AND l.user_id = ?) as my_reaction,
       (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) as comment_count,
       (SELECT id FROM polls pl WHERE pl.post_id = p.id) as poll_id,
-      GROUP_CONCAT(DISTINCT m.url ORDER BY m.order_index SEPARATOR '||') as media_urls,
-      GROUP_CONCAT(DISTINCT m.type ORDER BY m.order_index SEPARATOR '||') as media_types
+      GROUP_CONCAT(m.url ORDER BY m.order_index SEPARATOR '||') as media_urls,
+      GROUP_CONCAT(m.type ORDER BY m.order_index SEPARATOR '||') as media_types,
+      GROUP_CONCAT(COALESCE(m.thumbnail_url, '') ORDER BY m.order_index SEPARATOR '||') as media_thumbnails
     FROM posts p
     JOIN users u ON p.user_id = u.id
     LEFT JOIN media m ON m.post_id = p.id

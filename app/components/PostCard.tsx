@@ -136,7 +136,11 @@ export default function PostCard({
   const canDelete = post.user_id === currentUserId || isAdmin;
   const mediaUrls   = post.media_urls?.split('||').filter(Boolean)        || [];
   const mediaTypes  = post.media_types?.split('||').filter(Boolean)       || [];
-  const mediaThumbs = post.media_thumbnails?.split('||').filter(Boolean)  || [];
+  // Not .filter(Boolean) — GROUP_CONCAT(COALESCE(thumbnail_url, '')) emits an
+  // empty-string placeholder for media with no thumbnail so this array stays
+  // index-aligned with mediaUrls/mediaTypes; filtering would drop those
+  // placeholders and shift every thumbnail after them onto the wrong media.
+  const mediaThumbs = post.media_thumbnails?.split('||') || [];
   const imageUrls   = mediaUrls.filter((_, i) => mediaTypes[i] !== 'video');
 
   useEffect(() => {
@@ -325,7 +329,7 @@ export default function PostCard({
           <div className={`grid gap-0.5 ${mediaUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {mediaUrls.map((url, i) =>
               mediaTypes[i] === 'video' ? (
-                <video key={i} src={url} controls preload="none" className="w-full max-h-96 object-cover bg-black" />
+                <video key={i} src={url} poster={mediaThumbs[i] || undefined} controls preload="none" className="w-full max-h-96 object-cover bg-black" />
               ) : (
                 <img
                   key={i}

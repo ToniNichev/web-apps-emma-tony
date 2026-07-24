@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { getSession } from '@/app/lib/auth';
+
+const execFileAsync = promisify(execFile);
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 
@@ -29,13 +33,38 @@ export async function POST(request: Request) {
     const rawExt = (file.name.split('.').pop() || '').toLowerCase();
   const SAFE_VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi']);
   const ext = SAFE_VIDEO_EXTS.has(rawExt) ? rawExt : 'mp4';
-    const filename = `${uuidv4()}.${ext}`;
+    const id = uuidv4();
+    const filename = `${id}.${ext}`;
     const videoDir = path.join(uploadBase, 'videos');
+    const thumbDir = path.join(uploadBase, 'thumbs');
     await mkdir(videoDir, { recursive: true });
+    await mkdir(thumbDir, { recursive: true });
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(videoDir, filename), buffer);
+    const videoPath = path.join(videoDir, filename);
+    await writeFile(videoPath, buffer);
+
+    // Grab a poster frame with ffmpeg so the video isn't just a black box
+    // until played. Purely a nice-to-have — if ffmpeg fails (short clip,
+    // unsupported codec, not installed), the video still uploads fine.
+    // JPEG rather than WebP — the ffmpeg build on this server has no webp
+    // encoder registered.
+    const posterName = `${id}_poster.jpg`;
+    const posterPath = path.join(thumbDir, posterName);
+    let posterUrl: string | null = null;
+    try {
+      await execFileAsync('ffmpeg', [
+        '-y', '-ss', '0.5', '-i', videoPath,
+        '-frames:v', '1', '-update', '1', '-vf', 'scale=480:-2',
+        posterPath,
+      ], { timeout: 15_000 });
+      posterUrl = `/uploads/thumbs/${posterName}`;
+    } catch {
+      posterUrl = null;
+    }
+
     return NextResponse.json({
       url: `/uploads/videos/${filename}`,
+      thumbnail_url: posterUrl,
       type: 'video',
     }, { status: 201 });
   }

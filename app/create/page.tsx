@@ -13,7 +13,7 @@ export default function CreatePage() {
 
   // Post state
   const [content, setContent] = useState('');
-  const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' }[]>([]);
+  const [media, setMedia] = useState<{ url: string; type: 'image' | 'video'; thumbnail_url?: string | null }[]>([]);
   const [selectedBg, setSelectedBg] = useState('none');
 
   // Poll state
@@ -46,7 +46,7 @@ export default function CreatePage() {
       const res = await fetch('/api/media/upload', { method: 'POST', body: fd });
       if (res.ok) {
         const data = await res.json();
-        setMedia(m => [...m, { url: data.url, type: data.type }]);
+        setMedia(m => [...m, { url: data.url, type: data.type, thumbnail_url: data.thumbnail_url ?? null }]);
       }
     }
     setUploading(false);
@@ -255,7 +255,7 @@ export default function CreatePage() {
                   {media.map((m, i) => (
                     <div key={i} className="relative group">
                       {m.type === 'video' ? (
-                        <video src={m.url} className="w-full rounded-xl object-cover max-h-60 bg-black" />
+                        <video src={m.url} poster={m.thumbnail_url || undefined} controls className="w-full rounded-xl object-cover max-h-60 bg-black" />
                       ) : (
                         <img src={m.url} alt="" className="w-full rounded-xl object-cover max-h-60" />
                       )}
