@@ -101,17 +101,15 @@ async function aiKidFriendlinessCheck(
   tags: string,
   category: string,
 ): Promise<AiVerdict> {
-  const prompt = `You are a child safety reviewer for a social network used by kids aged 6-12.
-
-Evaluate this YouTube video and decide if it is appropriate for children aged 6-12.
+  const prompt = `You are checking if a YouTube video is appropriate for children aged 6-12, based only on the metadata below (you cannot see the actual video).
 
 Title: ${title}
 Channel: ${channel}${category ? `\nCategory: ${category}` : ''}${description ? `\nDescription: ${description}` : ''}${tags ? `\nTags: ${tags}` : ''}
 
-Answer with ONLY "YES" if kid-friendly, or "NO" if not appropriate.
-NOT kid-friendly: violence, horror, adult themes, strong language, dangerous stunts, drugs, weapons.
-Kid-friendly: gaming (family games), cartoons, educational, music, sports (including mountain biking, cycling, skateboarding), crafts, animals, cooking.
-When in doubt, default to NO — a missed safe video is a much smaller problem than showing a child something inappropriate.`;
+Only answer "NO" if the title, description, or tags contain a clear, specific signal of one of these: violence, horror or scary content, sexual or romantic content, drug or alcohol references, weapons, strong language, dangerous stunts presented for imitation, or self-harm.
+Do not reject a video over vague, indirect, or cultural associations (internet memes, unrelated fan reactions, a creator's general reputation, etc.) unless the metadata itself actually describes objectionable content.
+If you find no such signal, answer "YES" — ordinary music videos, cartoons, gaming, sports, crafts, animals, cooking, and educational content are all kid-friendly by default.
+Answer with ONLY "YES" or "NO".`;
 
   try {
     const res = await fetch('http://localhost:11434/api/chat', {
@@ -181,14 +179,16 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Only categories with a narrow, consistently low-risk content profile skip AI
-  // review. Categories like Music, Gaming, and Film & Animation vary too widely
-  // (explicit music videos, M-rated gameplay, etc.) to auto-approve by label alone.
+  // Categories that skip AI review outright. Music/Gaming can still contain
+  // explicit content, but the ageRestricted/embeddable checks above catch
+  // most of that; the AI check's own false-positive rate (rejecting
+  // completely mainstream videos on tenuous grounds) made it a worse
+  // tradeoff for these categories than the residual risk of skipping it.
   // `madeForKids: false` is a legal/monetization designation creators set by
   // default on most channels — it doesn't signal unsafe content, so it's not
   // used to gate this category-based shortcut.
   if (meta.category) {
-    const safeCategoryNames = ['Education', 'Pets & Animals', 'Howto & Style', 'Science & Technology'];
+    const safeCategoryNames = ['Education', 'Pets & Animals', 'Howto & Style', 'Science & Technology', 'Music', 'Gaming'];
     if (safeCategoryNames.includes(meta.category)) {
       return NextResponse.json<SafetyResult>({
         safe: true,
