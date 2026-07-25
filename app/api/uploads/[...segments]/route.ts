@@ -8,6 +8,9 @@ const CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.webm': 'video/webm',
 };
 
 export async function GET(_request: Request, { params }: { params: Promise<{ segments: string[] }> }) {

@@ -29,6 +29,11 @@ export async function POST(request: Request) {
 
   const uploadBase = path.join(process.cwd(), 'public', 'uploads');
 
+  // URLs below are served via /api/uploads/... (not the static /uploads/
+  // path) because this Next.js build snapshots public/ at server boot —
+  // newly written files 404 through the static handler until the next
+  // restart. Same reasoning as app/api/ai/image and the hangout background
+  // upload routes.
   if (isVideo) {
     const rawExt = (file.name.split('.').pop() || '').toLowerCase();
   const SAFE_VIDEO_EXTS = new Set(['mp4', 'mov', 'webm', 'avi']);
@@ -57,13 +62,13 @@ export async function POST(request: Request) {
         '-frames:v', '1', '-update', '1', '-vf', 'scale=480:-2',
         posterPath,
       ], { timeout: 15_000 });
-      posterUrl = `/uploads/thumbs/${posterName}`;
+      posterUrl = `/api/uploads/thumbs/${posterName}`;
     } catch {
       posterUrl = null;
     }
 
     return NextResponse.json({
-      url: `/uploads/videos/${filename}`,
+      url: `/api/uploads/videos/${filename}`,
       thumbnail_url: posterUrl,
       type: 'video',
     }, { status: 201 });
@@ -101,8 +106,8 @@ export async function POST(request: Request) {
     await writeFile(path.join(thumbDir, thumbname), thumbBuffer);
 
     return NextResponse.json({
-      url:          `/uploads/images/${filename}`,
-      thumbnail_url: `/uploads/thumbs/${thumbname}`,
+      url:          `/api/uploads/images/${filename}`,
+      thumbnail_url: `/api/uploads/thumbs/${thumbname}`,
       type: 'image',
     }, { status: 201 });
 
@@ -112,7 +117,7 @@ export async function POST(request: Request) {
     const fallbackName = `${id}.${ext}`;
     await writeFile(path.join(imgDir, fallbackName), buffer);
     return NextResponse.json({
-      url: `/uploads/images/${fallbackName}`,
+      url: `/api/uploads/images/${fallbackName}`,
       thumbnail_url: null,
       type: 'image',
     }, { status: 201 });
