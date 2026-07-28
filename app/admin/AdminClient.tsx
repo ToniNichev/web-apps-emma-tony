@@ -10,7 +10,7 @@ const THEMES = [
   { id: 'midnight', label: 'Midnight', from: '#818cf8', to: '#c084fc' },
 ];
 
-type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge' | 'kindness' | 'hangout';
+type Tab = 'site' | 'luna' | 'banner' | 'users' | 'invites' | 'recap' | 'challenge' | 'kindness' | 'hangout' | 'trivia';
 
 type Invite = {
   id: number;
@@ -43,6 +43,10 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const [challengeSaved, setChallengeSaved] = useState(false);
   const [kindnessReports, setKindnessReports] = useState<any[]>([]);
   const [hangoutReports, setHangoutReports] = useState<any[]>([]);
+  const [triviaHealth, setTriviaHealth] = useState<any[]>([]);
+  const [triviaPending, setTriviaPending] = useState<any[]>([]);
+  const [triviaGenerating, setTriviaGenerating] = useState<string | null>(null);
+  const [triviaError, setTriviaError] = useState('');
   const bannerFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -64,7 +68,43 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     if (tab === 'hangout') {
       fetch('/api/admin/hangout-backgrounds').then(r => r.json()).then(setHangoutReports);
     }
+    if (tab === 'trivia') {
+      loadTrivia();
+    }
   }, [tab]);
+
+  async function loadTrivia() {
+    const data = await fetch('/api/admin/trivia').then(r => r.json());
+    setTriviaHealth(data.health);
+    setTriviaPending(data.pending);
+  }
+
+  async function generateTrivia(category: string) {
+    setTriviaGenerating(category);
+    setTriviaError('');
+    const res = await fetch('/api/admin/trivia/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category }),
+    });
+    const data = await res.json();
+    setTriviaGenerating(null);
+    if (res.ok) {
+      loadTrivia();
+    } else {
+      setTriviaError(data.message || 'Something went wrong');
+    }
+  }
+
+  async function reviewTrivia(id: number, approve: boolean) {
+    await fetch('/api/admin/trivia/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, approve }),
+    });
+    setTriviaPending(qs => qs.filter(q => q.id !== id));
+    loadTrivia();
+  }
 
   async function resolveKindnessReport(id: number, restore: boolean) {
     await fetch('/api/admin/kindness', {
@@ -181,6 +221,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     { id: 'challenge', label: 'Challenge', emoji: '🎯' },
     { id: 'kindness', label: 'Kindness', emoji: '💛' },
     { id: 'hangout', label: 'Hangout', emoji: '🏡' },
+    { id: 'trivia', label: 'Trivia', emoji: '🧠' },
   ];
 
   return (
@@ -759,6 +800,81 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                         className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition"
                       >
                         Remove background
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* ── Trivia tab ── */}
+      {tab === 'trivia' && (
+        <div className="space-y-4">
+          <div className="card p-6">
+            <p className="font-semibold text-gray-700 text-sm mb-1">Question bank health</p>
+            <p className="text-xs text-gray-400 mb-4">
+              A category is flagged stale once every approved question in it has been asked 4+ times.
+              &quot;Generate more&quot; asks the AI for a fresh batch — they land in the review queue below, not live, until you approve them.
+            </p>
+            {triviaError && <p className="text-xs text-red-500 mb-3">{triviaError}</p>}
+            <div className="space-y-2">
+              {triviaHealth.map((h: any) => (
+                <div key={h.category} className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">
+                      {h.category}
+                      {h.stale && <span className="ml-2 text-xs font-bold text-amber-600">Stale</span>}
+                      {h.thin && <span className="ml-2 text-xs font-bold text-red-500">Low pool</span>}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {h.approved_count} approved · avg asked {h.avg_times_asked.toFixed(1)}x · min {h.min_times_asked}x
+                      {h.pending_review > 0 && ` · ${h.pending_review} pending review`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => generateTrivia(h.category)}
+                    disabled={triviaGenerating === h.category}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition disabled:opacity-50 flex-shrink-0"
+                  >
+                    {triviaGenerating === h.category ? 'Generating…' : 'Generate more'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <p className="font-semibold text-gray-700 text-sm mb-1">Pending review ({triviaPending.length})</p>
+            <p className="text-xs text-gray-400 mb-4">AI-generated questions — check the facts before approving.</p>
+            {triviaPending.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">Nothing waiting on review 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {triviaPending.map((q: any) => (
+                  <div key={q.id} className="border border-gray-100 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-purple-500 mb-1">{q.category}</p>
+                    <p className="text-sm text-gray-700 font-medium">{q.question}</p>
+                    <div className="grid grid-cols-2 gap-1.5 mt-2">
+                      {(['a', 'b', 'c', 'd'] as const).map(opt => (
+                        <p key={opt} className={`text-xs px-2 py-1 rounded-lg ${q.correct_option === opt ? 'bg-green-50 text-green-700 font-semibold' : 'bg-gray-50 text-gray-500'}`}>
+                          {q[`option_${opt}`]}
+                        </p>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => reviewTrivia(q.id, true)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => reviewTrivia(q.id, false)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition"
+                      >
+                        Reject
                       </button>
                     </div>
                   </div>

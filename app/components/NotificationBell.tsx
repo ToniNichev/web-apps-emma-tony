@@ -5,7 +5,7 @@ import { useAppSocket } from './SocketProvider';
 
 interface Notification {
   id: number;
-  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response' | 'kindness_note' | 'game_invite' | 'hangout_invite' | 'rps_invite';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'poll_vote' | 'challenge_response' | 'kindness_note' | 'game_invite' | 'hangout_invite' | 'rps_invite' | 'trivia_invite';
   actor_first_name: string;
   actor_username: string;
   actor_profile_picture: string | null;
@@ -37,6 +37,7 @@ function notifText(n: Notification) {
     case 'game_invite': return 'invited you to play Draw & Guess 🎨';
     case 'hangout_invite': return 'invited you to the Hangout Room 🏡';
     case 'rps_invite': return 'challenged you to Rock-Paper-Scissors ✊';
+    case 'trivia_invite': return 'invited you to a Trivia Duel 🧠';
   }
 }
 
@@ -48,6 +49,7 @@ function notifLink(n: Notification) {
   if (n.type === 'game_invite') return `/play/draw/${n.message_preview}`;
   if (n.type === 'hangout_invite') return `/play/hangout/${n.message_preview}`;
   if (n.type === 'rps_invite') return `/play/rps/${n.message_preview}`;
+  if (n.type === 'trivia_invite') return `/play/trivia/${n.message_preview}`;
   if (n.post_id) return `/post/${n.post_id}`;
   return '#';
 }

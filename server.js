@@ -155,6 +155,19 @@ app.prepare().then(() => {
       socket.leave(`rps:${room_id}`);
     });
 
+    // Trivia Duel — same shape as RPS: just room membership, no relayed
+    // client data. Round state and reveals are entirely server-authoritative
+    // (app/lib/trivia-game.ts), reached from the answer API route; a
+    // reconnecting client gets the in-progress question replayed via the
+    // room's GET route rather than a socket event, since it's naturally
+    // request/response (no push needed for a one-time catch-up read).
+    socket.on('trivia:join_room', ({ room_id }) => {
+      socket.join(`trivia:${room_id}`);
+    });
+    socket.on('trivia:leave_room', ({ room_id }) => {
+      socket.leave(`trivia:${room_id}`);
+    });
+
     // Hangout Room — pure relays. A client reports its own position; there is
     // no secrecy/fairness problem with movement in a low-stakes shared space,
     // so unlike game:draw_stroke there is no authorization check here.

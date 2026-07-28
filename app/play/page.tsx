@@ -8,6 +8,7 @@ const GAMES = [
   { href: '/play/draw', emoji: '🎨', title: 'Draw & Guess', description: 'Take turns drawing and guessing the word!' },
   { href: '/play/hangout', emoji: '🏡', title: 'Hangout Room', description: 'Walk around, chat, and decorate a shared space with friends.' },
   { href: '/play/rps', emoji: '✊', title: 'Rock-Paper-Scissors', description: 'Challenge a friend — first to 3 wins!' },
+  { href: '/play/trivia', emoji: '🧠', title: 'Trivia Duel', description: 'Test your knowledge — 8 questions, most correct wins!' },
 ];
 
 export default async function PlayHubPage() {
