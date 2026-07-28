@@ -136,18 +136,11 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
                   <span>💛</span> Kindness Wall
                 </Link>
                 <Link
-                  href="/play/draw"
+                  href="/play"
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
                 >
-                  <span>🎨</span> Draw &amp; Guess
-                </Link>
-                <Link
-                  href="/play/hangout"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <span>🏡</span> Hangout Room
+                  <span>🎮</span> Play
                 </Link>
                 {user.is_admin ? (
                   <Link
