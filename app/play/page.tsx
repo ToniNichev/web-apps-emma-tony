@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 const GAMES = [
   { href: '/play/draw', emoji: '🎨', title: 'Draw & Guess', description: 'Take turns drawing and guessing the word!' },
   { href: '/play/hangout', emoji: '🏡', title: 'Hangout Room', description: 'Walk around, chat, and decorate a shared space with friends.' },
+  { href: '/play/rps', emoji: '✊', title: 'Rock-Paper-Scissors', description: 'Challenge a friend — first to 3 wins!' },
 ];
 
 export default async function PlayHubPage() {

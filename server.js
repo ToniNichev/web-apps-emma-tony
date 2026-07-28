@@ -144,6 +144,17 @@ app.prepare().then(() => {
       socket.to(`game:${room_id}`).emit('game:clear_canvas');
     });
 
+    // Rock-Paper-Scissors — just room membership. Picks are never relayed
+    // client-to-client (that would leak a move to the opponent before they've
+    // locked in their own) — they go through the pick API route, which
+    // resolves the round and pushes the reveal via this same shared `io`.
+    socket.on('rps:join_room', ({ room_id }) => {
+      socket.join(`rps:${room_id}`);
+    });
+    socket.on('rps:leave_room', ({ room_id }) => {
+      socket.leave(`rps:${room_id}`);
+    });
+
     // Hangout Room — pure relays. A client reports its own position; there is
     // no secrecy/fairness problem with movement in a low-stakes shared space,
     // so unlike game:draw_stroke there is no authorization check here.
