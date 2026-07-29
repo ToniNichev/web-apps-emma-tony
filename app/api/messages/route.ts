@@ -21,12 +21,15 @@ export async function GET(request: Request) {
   }
 
   const [rows] = await db.execute(`
-    SELECT m.*, u.username, u.first_name, u.last_name, u.profile_picture
-    FROM messages m
-    JOIN users u ON m.sender_id = u.id
-    WHERE m.conversation_id = ?
-    ORDER BY m.created_at ASC
-    LIMIT 100
+    SELECT * FROM (
+      SELECT m.*, u.username, u.first_name, u.last_name, u.profile_picture
+      FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      WHERE m.conversation_id = ?
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT 100
+    ) recent
+    ORDER BY created_at ASC, id ASC
   `, [conversation_id]) as any[];
 
   await db.execute(
