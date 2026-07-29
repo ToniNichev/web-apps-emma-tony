@@ -120,7 +120,10 @@ export default function TriviaRoomClient({
     }
     function onRoundResult(result: RoundResult) {
       setRoundResult(result);
-      setQuestion(null);
+      // question stays set — the reveal renders in the same option grid
+      // (Millionaire-style: buttons recolor in place) rather than swapping
+      // to a separate summary. onRoundStarted replaces it wholesale when
+      // the next round begins.
       if (result.match_finished) {
         setTimeout(() => { refreshRoom(); }, 3000);
       }
@@ -289,49 +292,48 @@ export default function TriviaRoomClient({
         </div>
       )}
 
-      {room.status === 'active' && roundResult && (
-        <div className="card p-6 text-center space-y-3">
-          <p className="text-xs text-gray-400">Round {roundResult.round} of {room.total_rounds}</p>
-          <p className="text-sm text-gray-500">{roundResult.question}</p>
-          <p className="font-bold text-lg text-green-600">
-            Correct answer: {roundResult.correct_option.toUpperCase()}) {roundResult.correct_answer_text}
-          </p>
-          <div className="flex flex-wrap justify-center gap-2 text-xs">
-            {room.players.filter(p => p.status === 'joined').map(p => {
-              const ans = roundResult.answers[p.user_id];
-              const correct = ans === roundResult.correct_option;
-              return (
-                <span key={p.user_id} className={`px-2.5 py-1 rounded-full ${ans === undefined ? 'bg-gray-100 text-gray-400' : correct ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-500'}`}>
-                  {p.user_id === currentUserId ? 'You' : p.first_name}: {ans ? ans.toUpperCase() : 'no answer'} {ans !== undefined && (correct ? '✓' : '✗')}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {room.status === 'active' && question && !roundResult && (
+      {room.status === 'active' && question && (
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Round {question.round} of {room.total_rounds}</span>
-            <span className="font-semibold">{Math.max(0, Math.ceil((question.deadline - now) / 1000))}s</span>
+            {!roundResult && <span className="font-semibold">{Math.max(0, Math.ceil((question.deadline - now) / 1000))}s</span>}
           </div>
           <p className="font-semibold text-gray-800 text-center text-lg">{question.question}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {OPTION_KEYS.map(opt => (
-              <button
-                key={opt}
-                onClick={() => answer(opt)}
-                disabled={answeredThisRound}
-                className={`text-left px-4 py-3 rounded-xl border text-sm transition disabled:opacity-60 ${
-                  myAnswer === opt ? 'bg-purple-100 border-purple-300 text-purple-700 font-semibold' : 'border-gray-200 hover:border-purple-200'
-                }`}
-              >
-                <span className="font-bold mr-2">{opt.toUpperCase()}</span>{question.options[opt]}
-              </button>
-            ))}
+            {OPTION_KEYS.map(opt => {
+              const isCorrect = roundResult?.correct_option === opt;
+              const isMyWrongPick = !!roundResult && myAnswer === opt && !isCorrect;
+              const pickers = roundResult
+                ? room.players.filter(p => p.status === 'joined' && roundResult.answers[p.user_id] === opt)
+                : [];
+              const style = roundResult
+                ? isCorrect
+                  ? 'bg-green-100 border-green-400 text-green-800 font-semibold'
+                  : isMyWrongPick
+                    ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
+                    : 'border-gray-200 text-gray-400'
+                : myAnswer === opt
+                  ? 'bg-purple-100 border-purple-300 text-purple-700 font-semibold'
+                  : 'border-gray-200 hover:border-purple-200';
+              return (
+                <button
+                  key={opt}
+                  onClick={() => answer(opt)}
+                  disabled={answeredThisRound || !!roundResult}
+                  className={`text-left px-4 py-3 rounded-xl border text-sm transition disabled:opacity-60 ${style}`}
+                >
+                  <span className="font-bold mr-2">{opt.toUpperCase()}</span>{question.options[opt]}
+                  {pickers.length > 0 && (
+                    <span className="block text-xs mt-1 font-normal opacity-75">
+                      {pickers.map(p => p.user_id === currentUserId ? 'You' : p.first_name).join(', ')}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          {answeredThisRound && <p className="text-center text-xs text-gray-400">Answer locked in — waiting for the others…</p>}
+          {!roundResult && answeredThisRound && <p className="text-center text-xs text-gray-400">Answer locked in — waiting for the others…</p>}
+          {roundResult && <p className="text-center text-xs text-gray-400">Next question coming up…</p>}
           {error && <p className="text-center text-xs text-red-500">{error}</p>}
         </div>
       )}
