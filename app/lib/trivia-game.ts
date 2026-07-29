@@ -7,6 +7,8 @@ const POINTS_PER_CORRECT = 10;
 export const TOTAL_ROUNDS = 8;
 
 type Option = 'a' | 'b' | 'c' | 'd';
+const OPTION_KEYS: Option[] = ['a', 'b', 'c', 'd'];
+type Lifeline = 'fifty_fifty' | 'ai_friend';
 
 interface CurrentRound {
   round: number;
@@ -18,11 +20,13 @@ interface CurrentRound {
   answers: Map<number, Option>;
   deadline: number;
   timer: ReturnType<typeof setTimeout>;
+  eliminatedOptions: Map<number, Option[]>; // userId -> the 2 options their 50/50 hid, this round only
 }
 
 interface MatchState {
   usedQuestionIds: Set<number>;
   current: CurrentRound | null;
+  lifelinesUsed: Map<number, Set<Lifeline>>; // userId -> lifelines already spent this match
 }
 
 function stateMap(): Map<number, MatchState> {
@@ -67,7 +71,7 @@ export async function startMatch(roomId: number, category: string) {
   if (!categories.includes(category)) return { error: 'Invalid category' };
 
   clearRoomState(roomId);
-  stateMap().set(roomId, { usedQuestionIds: new Set(), current: null });
+  stateMap().set(roomId, { usedQuestionIds: new Set(), current: null, lifelinesUsed: new Map() });
 
   await db.execute(
     'UPDATE trivia_rooms SET status = "active", category = ?, current_round = 0, total_rounds = ?, expires_at = NULL WHERE id = ?',
@@ -108,6 +112,7 @@ export async function startNextRound(roomId: number) {
     answers: new Map(),
     deadline,
     timer,
+    eliminatedOptions: new Map(),
   };
   state.usedQuestionIds.add(q.id);
 
@@ -150,6 +155,93 @@ export async function submitAnswer(roomId: number, userId: number, option: Optio
   }
 
   return { ok: true };
+}
+
+async function checkLifelineEligible(roomId: number, userId: number, lifeline: Lifeline) {
+  const state = stateMap().get(roomId);
+  if (!state || !state.current) return { error: 'No round is active right now' } as const;
+  if (state.current.answers.has(userId)) return { error: 'You already answered this round' } as const;
+
+  const [memberRows] = await db.execute(
+    'SELECT id FROM trivia_room_players WHERE room_id = ? AND user_id = ? AND status = "joined"',
+    [roomId, userId]
+  ) as any[];
+  if ((memberRows as any[]).length === 0) return { error: 'You are not in this room' } as const;
+
+  let used = state.lifelinesUsed.get(userId);
+  if (!used) { used = new Set(); state.lifelinesUsed.set(userId, used); }
+  if (used.has(lifeline)) {
+    return { error: lifeline === 'fifty_fifty' ? 'You already used 50/50 this match' : 'You already used your AI friend this match' } as const;
+  }
+
+  return { ok: true, state, used } as const;
+}
+
+// Eliminates 2 of the 3 wrong options for this player only — the other
+// player's options (and the shared round state everyone else sees) are untouched.
+export async function useFiftyFifty(roomId: number, userId: number) {
+  const check = await checkLifelineEligible(roomId, userId, 'fifty_fifty');
+  if ('error' in check) return check;
+  const { state, used } = check;
+  const round = state.current!;
+
+  const wrongOptions = OPTION_KEYS.filter(o => o !== round.correctOption);
+  const eliminated = [...wrongOptions].sort(() => Math.random() - 0.5).slice(0, 2);
+  round.eliminatedOptions.set(userId, eliminated);
+  used.add('fifty_fifty');
+
+  return { ok: true, eliminated };
+}
+
+// Asks the local Ollama model for its best guess — same model used to
+// generate the question bank. It isn't told the correct answer, so like a
+// real phone-a-friend it can genuinely get it wrong.
+export async function useAiFriend(roomId: number, userId: number) {
+  const check = await checkLifelineEligible(roomId, userId, 'ai_friend');
+  if ('error' in check) return check;
+  const { state, used } = check;
+  const round = state.current!;
+
+  const prompt = `A friend just called you mid-game asking for help on this trivia question — give your best guess fast.
+Question: ${round.question}
+a) ${round.options.a}
+b) ${round.options.b}
+c) ${round.options.c}
+d) ${round.options.d}
+
+Respond with ONLY a JSON object, no other text: {"answer": "a", "reason": "one short sentence explaining your guess"}`;
+
+  let guess: { answer: Option; reason: string } | null = null;
+  try {
+    const res = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gemma3:4b', messages: [{ role: 'user', content: prompt }], stream: false }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const content: string = data.message?.content ?? '';
+      const start = content.indexOf('{');
+      const end = content.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end > start) {
+        const parsed = JSON.parse(content.slice(start, end + 1));
+        if (OPTION_KEYS.includes(parsed.answer) && typeof parsed.reason === 'string') {
+          guess = { answer: parsed.answer, reason: parsed.reason.slice(0, 200) };
+        }
+      }
+    }
+  } catch {
+    // guess stays null — reported below as a failed call, lifeline not spent
+  }
+
+  if (!guess) return { error: "Your AI friend didn't pick up — try again" };
+  // The model call can take a few seconds; the round may have moved on by
+  // the time it answers. Don't spend the lifeline on an answer that arrives too late.
+  if (stateMap().get(roomId)?.current !== round) return { error: 'Too late — the round already ended' };
+
+  used.add('ai_friend');
+  return { ok: true, answer: guess.answer, reason: guess.reason };
 }
 
 async function revealRound(roomId: number) {
@@ -229,5 +321,7 @@ export function getRoundSnapshot(roomId: number, userId: number) {
     options: state.current.options,
     deadline: state.current.deadline,
     already_answered: state.current.answers.has(userId),
+    lifelines_used: [...(state.lifelinesUsed.get(userId) ?? [])],
+    eliminated_options: state.current.eliminatedOptions.get(userId) ?? [],
   };
 }

@@ -23,7 +23,11 @@ interface RoundSnapshot {
   options: Record<Option, string>;
   deadline: number;
   already_answered: boolean;
+  lifelines_used: Lifeline[];
+  eliminated_options: Option[];
 }
+
+type Lifeline = 'fifty_fifty' | 'ai_friend';
 
 interface RoomState {
   id: number;
@@ -78,6 +82,17 @@ export default function TriviaRoomClient({
   const [scores, setScores] = useState<Record<number, number>>(
     () => Object.fromEntries(initialRoom.players.map(p => [p.user_id, p.score]))
   );
+  // lifelinesUsed persists for the whole match (reset only on rematch);
+  // eliminatedOptions/aiFriendHint are per-round and clear when a new one starts.
+  const [lifelinesUsed, setLifelinesUsed] = useState<Set<Lifeline>>(
+    () => new Set(initialRoom.current_round_snapshot?.lifelines_used ?? [])
+  );
+  const [eliminatedOptions, setEliminatedOptions] = useState<Option[]>(
+    initialRoom.current_round_snapshot?.eliminated_options ?? []
+  );
+  const [aiFriendHint, setAiFriendHint] = useState<{ answer: Option; reason: string } | null>(null);
+  const [usingLifeline, setUsingLifeline] = useState<Lifeline | null>(null);
+  const [lifelineError, setLifelineError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [category, setCategory] = useState<string>(ALL_CATEGORIES[ALL_CATEGORIES.length - 1]);
   const [starting, setStarting] = useState(false);
@@ -96,6 +111,8 @@ export default function TriviaRoomClient({
       if (data.current_round_snapshot) {
         setQuestion(data.current_round_snapshot);
         setAnsweredThisRound(data.current_round_snapshot.already_answered);
+        setLifelinesUsed(new Set(data.current_round_snapshot.lifelines_used));
+        setEliminatedOptions(data.current_round_snapshot.eliminated_options);
       }
     }
   }, [roomId]);
@@ -121,11 +138,14 @@ export default function TriviaRoomClient({
       // room.status === 'active') even though the question already arrived,
       // until they reload and get a fresh fetch.
       setRoom(r => (r.status === 'active' ? r : { ...r, status: 'active' }));
-      setQuestion({ ...data, already_answered: false });
+      setQuestion(q => ({ ...data, already_answered: false, lifelines_used: [...(q?.lifelines_used ?? [])], eliminated_options: [] }));
       setMyAnswer(null);
       setAnsweredThisRound(false);
       setRoundResult(null);
       setError(null);
+      setEliminatedOptions([]);
+      setAiFriendHint(null);
+      setLifelineError(null);
     }
     function onRoundResult(result: RoundResult) {
       setRoundResult(result);
@@ -143,6 +163,10 @@ export default function TriviaRoomClient({
       setMyAnswer(null);
       setAnsweredThisRound(false);
       setRoundResult(null);
+      setLifelinesUsed(new Set());
+      setEliminatedOptions([]);
+      setAiFriendHint(null);
+      setLifelineError(null);
       refreshRoom();
     }
 
@@ -205,6 +229,36 @@ export default function TriviaRoomClient({
       setError(data.message || 'Something went wrong');
       setMyAnswer(null);
       setAnsweredThisRound(false);
+    }
+  }
+
+  async function useFiftyFifty() {
+    if (usingLifeline || lifelinesUsed.has('fifty_fifty') || answeredThisRound || !question) return;
+    setUsingLifeline('fifty_fifty');
+    setLifelineError(null);
+    const res = await fetch(`/api/games/trivia/rooms/${roomId}/lifeline/fifty-fifty`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    setUsingLifeline(null);
+    if (res.ok) {
+      setEliminatedOptions(data.eliminated);
+      setLifelinesUsed(prev => new Set(prev).add('fifty_fifty'));
+    } else {
+      setLifelineError(data.message || 'Something went wrong');
+    }
+  }
+
+  async function useAiFriend() {
+    if (usingLifeline || lifelinesUsed.has('ai_friend') || answeredThisRound || !question) return;
+    setUsingLifeline('ai_friend');
+    setLifelineError(null);
+    const res = await fetch(`/api/games/trivia/rooms/${roomId}/lifeline/ai-friend`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    setUsingLifeline(null);
+    if (res.ok) {
+      setAiFriendHint({ answer: data.answer, reason: data.reason });
+      setLifelinesUsed(prev => new Set(prev).add('ai_friend'));
+    } else {
+      setLifelineError(data.message || 'Something went wrong');
     }
   }
 
@@ -316,10 +370,35 @@ export default function TriviaRoomClient({
             })()}
           </div>
           <p className="font-semibold text-gray-800 text-center text-lg">{question.question}</p>
+          {!roundResult && !answeredThisRound && (
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={useFiftyFifty}
+                disabled={!!usingLifeline || lifelinesUsed.has('fifty_fifty')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full border border-purple-200 text-purple-600 hover:bg-purple-50 transition disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                {usingLifeline === 'fifty_fifty' ? 'Eliminating…' : '✂️ 50/50'}
+              </button>
+              <button
+                onClick={useAiFriend}
+                disabled={!!usingLifeline || lifelinesUsed.has('ai_friend')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-full border border-purple-200 text-purple-600 hover:bg-purple-50 transition disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                {usingLifeline === 'ai_friend' ? 'Calling…' : '🤖 Ask AI friend'}
+              </button>
+            </div>
+          )}
+          {lifelineError && <p className="text-center text-xs text-red-500">{lifelineError}</p>}
+          {aiFriendHint && !roundResult && (
+            <p className="text-center text-xs text-purple-700 bg-purple-50 rounded-lg py-2 px-3">
+              🤖 Your AI friend says <strong>{aiFriendHint.answer.toUpperCase()}</strong> — “{aiFriendHint.reason}”
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {OPTION_KEYS.map(opt => {
               const isCorrect = roundResult?.correct_option === opt;
               const isMyWrongPick = !!roundResult && myAnswer === opt && !isCorrect;
+              const isEliminated = !roundResult && eliminatedOptions.includes(opt);
               const pickers = roundResult
                 ? room.players.filter(p => p.status === 'joined' && roundResult.answers[p.user_id] === opt)
                 : [];
@@ -329,14 +408,16 @@ export default function TriviaRoomClient({
                   : isMyWrongPick
                     ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
                     : 'border-gray-200 text-gray-400'
-                : myAnswer === opt
-                  ? 'bg-purple-100 border-purple-300 text-purple-700 font-semibold'
-                  : 'border-gray-200 hover:border-purple-200';
+                : isEliminated
+                  ? 'border-gray-100 text-gray-300 line-through'
+                  : myAnswer === opt
+                    ? 'bg-purple-100 border-purple-300 text-purple-700 font-semibold'
+                    : 'border-gray-200 hover:border-purple-200';
               return (
                 <button
                   key={opt}
                   onClick={() => answer(opt)}
-                  disabled={answeredThisRound || !!roundResult}
+                  disabled={answeredThisRound || !!roundResult || isEliminated}
                   className={`text-left px-4 py-3 rounded-xl border text-sm transition disabled:opacity-60 ${style}`}
                 >
                   <span className="font-bold mr-2">{opt.toUpperCase()}</span>{question.options[opt]}
