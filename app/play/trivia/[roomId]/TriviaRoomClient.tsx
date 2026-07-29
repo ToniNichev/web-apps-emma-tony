@@ -70,6 +70,14 @@ export default function TriviaRoomClient({
     initialRoom.current_round_snapshot?.already_answered ?? false
   );
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null);
+  // Scores live here, separate from room.players[].score, because
+  // room only gets refetched on a handful of events (join, start, rematch,
+  // match finish) — round_started resets roundResult to null every round,
+  // and without a persistent source the scoreboard would fall back to the
+  // stale score from the last refetch (0-0 for most of the match).
+  const [scores, setScores] = useState<Record<number, number>>(
+    () => Object.fromEntries(initialRoom.players.map(p => [p.user_id, p.score]))
+  );
   const [now, setNow] = useState(() => Date.now());
   const [category, setCategory] = useState<string>(ALL_CATEGORIES[ALL_CATEGORIES.length - 1]);
   const [starting, setStarting] = useState(false);
@@ -84,6 +92,7 @@ export default function TriviaRoomClient({
     if (res.ok) {
       const data = await res.json();
       setRoom(data);
+      setScores(Object.fromEntries((data.players as Player[]).map(p => [p.user_id, p.score])));
       if (data.current_round_snapshot) {
         setQuestion(data.current_round_snapshot);
         setAnsweredThisRound(data.current_round_snapshot.already_answered);
@@ -120,6 +129,7 @@ export default function TriviaRoomClient({
     }
     function onRoundResult(result: RoundResult) {
       setRoundResult(result);
+      setScores(result.scores);
       // question stays set — the reveal renders in the same option grid
       // (Millionaire-style: buttons recolor in place) rather than swapping
       // to a separate summary. onRoundStarted replaces it wholesale when
@@ -249,7 +259,7 @@ export default function TriviaRoomClient({
         {room.players.map(p => (
           <div key={p.user_id} className={`text-center px-3 py-1.5 rounded-xl ${p.user_id === currentUserId ? 'bg-purple-50' : ''}`}>
             <p className="text-xs text-gray-500">{p.user_id === currentUserId ? 'You' : p.first_name}</p>
-            <p className="text-xl font-black brand-text">{roundResult ? (roundResult.scores[p.user_id] ?? p.score) : p.score}</p>
+            <p className="text-xl font-black brand-text">{scores[p.user_id] ?? p.score}</p>
           </div>
         ))}
       </div>
