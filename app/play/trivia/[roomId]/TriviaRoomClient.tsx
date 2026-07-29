@@ -103,6 +103,15 @@ export default function TriviaRoomClient({
     function onRoomUpdated() { refreshRoom(); }
     function onRoomDeleted() { router.push('/play/trivia'); }
     function onRoundStarted(data: { round: number; question: string; options: Record<Option, string>; deadline: number }) {
+      // The host's own client already knows the room is active (startGame
+      // calls refreshRoom on success), but this is the ONLY signal every
+      // other player gets that the match has left the lobby — there's no
+      // separate room_updated for that transition. Without flipping status
+      // here too, everyone but the host stays stuck on the "waiting for
+      // host to start" screen (the round-active UI is gated on
+      // room.status === 'active') even though the question already arrived,
+      // until they reload and get a fresh fetch.
+      setRoom(r => (r.status === 'active' ? r : { ...r, status: 'active' }));
       setQuestion({ ...data, already_answered: false });
       setMyAnswer(null);
       setAnsweredThisRound(false);
