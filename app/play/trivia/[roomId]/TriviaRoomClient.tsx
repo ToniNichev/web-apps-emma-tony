@@ -306,7 +306,14 @@ export default function TriviaRoomClient({
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Round {question.round} of {room.total_rounds}</span>
-            {!roundResult && <span className="font-semibold">{Math.max(0, Math.ceil((question.deadline - now) / 1000))}s</span>}
+            {!roundResult && (() => {
+              const secondsLeft = Math.max(0, Math.ceil((question.deadline - now) / 1000));
+              return (
+                <span className={`font-semibold ${secondsLeft <= 5 && secondsLeft > 0 ? 'text-red-500 trivia-timer-blink' : ''}`}>
+                  {secondsLeft}s
+                </span>
+              );
+            })()}
           </div>
           <p className="font-semibold text-gray-800 text-center text-lg">{question.question}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
