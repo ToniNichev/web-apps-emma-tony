@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppSocket } from '@/app/components/SocketProvider';
 import { CATEGORIES } from '@/app/lib/trivia-categories';
@@ -7,6 +7,35 @@ import { CATEGORIES } from '@/app/lib/trivia-categories';
 type Option = 'a' | 'b' | 'c' | 'd';
 const OPTION_KEYS: Option[] = ['a', 'b', 'c', 'd'];
 const ALL_CATEGORIES = [...CATEGORIES, 'Mixed'] as const;
+const CONFETTI_COLORS = ['#f472b6', '#a855f7', '#facc15', '#38bdf8', '#4ade80', '#fb923c'];
+
+function Confetti() {
+  const pieces = useMemo(() => Array.from({ length: 80 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.6,
+    duration: 2.6 + Math.random() * 1.6,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    drift: Math.round((Math.random() - 0.5) * 160),
+  })), []);
+  return (
+    <div className="trivia-confetti-container" aria-hidden="true">
+      {pieces.map(p => (
+        <span
+          key={p.id}
+          className="trivia-confetti-piece"
+          style={{
+            left: `${p.left}%`,
+            backgroundColor: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            ['--drift' as string]: `${p.drift}px`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface Player {
   user_id: number;
@@ -99,8 +128,25 @@ export default function TriviaRoomClient({
   const [rematching, setRematching] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const isHost = room.host_id === currentUserId;
+
+  // Fires once when the match ends with this player as the sole winner —
+  // not for ties or losses.
+  useEffect(() => {
+    if (room.status !== 'finished' || room.players.length === 0) {
+      setShowConfetti(false);
+      return;
+    }
+    const maxScore = Math.max(...room.players.map(p => p.score));
+    const winners = room.players.filter(p => p.score === maxScore);
+    const iWon = winners.length === 1 && winners[0].user_id === currentUserId;
+    if (!iWon) return;
+    setShowConfetti(true);
+    const t = setTimeout(() => setShowConfetti(false), 4500);
+    return () => clearTimeout(t);
+  }, [room.status, room.players, currentUserId]);
 
   const refreshRoom = useCallback(async () => {
     const res = await fetch(`/api/games/trivia/rooms/${roomId}`);
@@ -301,6 +347,7 @@ export default function TriviaRoomClient({
 
   return (
     <div className="space-y-4">
+      {showConfetti && <Confetti />}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold brand-text">Trivia Duel 🧠</h1>
         <button onClick={leaveRoom} className="text-sm text-gray-400 hover:text-red-500 transition">
