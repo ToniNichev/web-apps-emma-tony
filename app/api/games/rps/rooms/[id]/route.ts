@@ -8,14 +8,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   const [roomRows] = await db.execute(
-    `SELECT r.id, r.status, r.round, r.created_by,
+    `SELECT r.id, r.status, r.round, r.created_by, r.expires_at,
        h.first_name as host_first_name, h.username as host_username
      FROM rps_rooms r JOIN users h ON h.id = r.created_by
      WHERE r.id = ?`,
     [id]
   ) as any[];
   const room = (roomRows as any[])[0];
-  if (!room) return NextResponse.json({ message: 'Room not found' }, { status: 404 });
+  // expires_at is only ever set once a match finishes (or cleared on
+  // rematch), so a room past it is one the hourly cleanup job just hasn't
+  // physically deleted yet — treat it as already gone rather than waiting.
+  if (!room || (room.expires_at && new Date(room.expires_at) <= new Date())) {
+    return NextResponse.json({ message: 'Room not found' }, { status: 404 });
+  }
 
   const [playerRows] = await db.execute(
     `SELECT gp.user_id, gp.status, gp.score, u.username, u.first_name, u.profile_picture

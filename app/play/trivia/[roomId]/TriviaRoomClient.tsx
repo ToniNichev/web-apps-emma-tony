@@ -308,7 +308,7 @@ export default function TriviaRoomClient({
                 : [];
               const style = roundResult
                 ? isCorrect
-                  ? 'bg-green-100 border-green-400 text-green-800 font-semibold'
+                  ? 'bg-green-100 border-green-400 text-green-800 font-semibold trivia-correct-pulse'
                   : isMyWrongPick
                     ? 'bg-red-100 border-red-400 text-red-700 font-semibold'
                     : 'border-gray-200 text-gray-400'

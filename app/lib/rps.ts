@@ -80,8 +80,10 @@ export async function submitPick(roomId: number, userId: number, move: Move) {
   const matchWinnerId = myScore >= WINS_NEEDED ? userId : oppScore >= WINS_NEEDED ? opponentId : null;
 
   await db.execute(
-    'UPDATE rps_rooms SET round = ?, status = ? WHERE id = ?',
-    [nextRound, matchWinnerId ? 'finished' : 'active', roomId]
+    matchWinnerId
+      ? 'UPDATE rps_rooms SET round = ?, status = "finished", expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?'
+      : 'UPDATE rps_rooms SET round = ?, status = "active" WHERE id = ?',
+    [nextRound, roomId]
   );
   if (matchWinnerId) clearRoomState(roomId);
 
@@ -99,7 +101,7 @@ export async function submitPick(roomId: number, userId: number, move: Move) {
 
 export async function rematch(roomId: number) {
   clearRoomState(roomId);
-  await db.execute('UPDATE rps_rooms SET status = "active", round = 0 WHERE id = ?', [roomId]);
+  await db.execute('UPDATE rps_rooms SET status = "active", round = 0, expires_at = NULL WHERE id = ?', [roomId]);
   await db.execute('UPDATE rps_room_players SET score = 0 WHERE room_id = ?', [roomId]);
 
   const io = gameIO();

@@ -14,7 +14,7 @@ export async function GET() {
      FROM rps_room_players gp
      JOIN rps_rooms r ON r.id = gp.room_id
      JOIN users h ON h.id = r.created_by
-     WHERE gp.user_id = ?
+     WHERE gp.user_id = ? AND (r.expires_at IS NULL OR r.expires_at > NOW())
      ORDER BY r.created_at DESC`,
     [session.id]
   ) as any[];

@@ -70,7 +70,7 @@ export async function startMatch(roomId: number, category: string) {
   stateMap().set(roomId, { usedQuestionIds: new Set(), current: null });
 
   await db.execute(
-    'UPDATE trivia_rooms SET status = "active", category = ?, current_round = 0, total_rounds = ? WHERE id = ?',
+    'UPDATE trivia_rooms SET status = "active", category = ?, current_round = 0, total_rounds = ?, expires_at = NULL WHERE id = ?',
     [category, TOTAL_ROUNDS, roomId]
   );
 
@@ -184,7 +184,7 @@ async function revealRound(roomId: number) {
     const maxScore = Math.max(...(playerRows as any[]).map(p => p.score));
     const winners = (playerRows as any[]).filter(p => p.score === maxScore);
     matchWinnerId = winners.length === 1 ? winners[0].user_id : null;
-    await db.execute('UPDATE trivia_rooms SET status = "finished" WHERE id = ?', [roomId]);
+    await db.execute('UPDATE trivia_rooms SET status = "finished", expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?', [roomId]);
     clearRoomState(roomId);
   }
 
