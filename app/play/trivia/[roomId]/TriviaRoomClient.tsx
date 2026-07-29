@@ -358,12 +358,12 @@ export default function TriviaRoomClient({
 
       {room.status === 'active' && question && (
         <div className="card p-6 space-y-4">
-          <div className="flex items-center justify-between text-xs text-gray-400">
-            <span>Round {question.round} of {room.total_rounds}</span>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-500">Round {question.round} of {room.total_rounds}</span>
             {!roundResult && (() => {
               const secondsLeft = Math.max(0, Math.ceil((question.deadline - now) / 1000));
               return (
-                <span className={`font-semibold ${secondsLeft <= 5 && secondsLeft > 0 ? 'text-red-500 trivia-timer-blink' : ''}`}>
+                <span className={`text-2xl font-black tabular-nums ${secondsLeft <= 5 && secondsLeft > 0 ? 'text-red-500 trivia-timer-blink' : 'text-gray-500'}`}>
                   {secondsLeft}s
                 </span>
               );
