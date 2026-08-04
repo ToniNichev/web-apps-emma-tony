@@ -78,6 +78,7 @@ interface RoundResult {
   correct_option: Option;
   correct_answer_text: string;
   answers: Record<number, Option>;
+  points_earned: Record<number, number>;
   scores: Record<number, number>;
   match_winner_id?: number | null;
   match_finished?: boolean;
@@ -470,7 +471,11 @@ export default function TriviaRoomClient({
                   <span className="font-bold mr-2">{opt.toUpperCase()}</span>{question.options[opt]}
                   {pickers.length > 0 && (
                     <span className="block text-xs mt-1 font-normal opacity-75">
-                      {pickers.map(p => p.user_id === currentUserId ? 'You' : p.first_name).join(', ')}
+                      {pickers.map(p => {
+                        const name = p.user_id === currentUserId ? 'You' : p.first_name;
+                        const points = roundResult?.points_earned[p.user_id];
+                        return points ? `${name} (+${points})` : name;
+                      }).join(', ')}
                     </span>
                   )}
                 </button>

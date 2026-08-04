@@ -3,7 +3,11 @@ import { getRandomQuestions, recordQuestionAsked, checkAndRegenerateIfStale, CAT
 
 const ROUND_MS = 15_000;
 const REVEAL_PAUSE_MS = 4_000; // time players see the answer before the next round auto-starts
+// A correct answer is always worth at least POINTS_PER_CORRECT, the same
+// floor as before speed scoring existed, plus up to SPEED_BONUS_MAX more for
+// answering quickly — linear in the time left when the answer landed.
 const POINTS_PER_CORRECT = 10;
+const SPEED_BONUS_MAX = 10;
 export const TOTAL_ROUNDS = 8;
 
 type Option = 'a' | 'b' | 'c' | 'd';
@@ -17,7 +21,7 @@ interface CurrentRound {
   question: string;
   options: Record<Option, string>;
   correctOption: Option;
-  answers: Map<number, Option>;
+  answers: Map<number, { option: Option; answeredAt: number }>;
   deadline: number;
   timer: ReturnType<typeof setTimeout>;
   eliminatedOptions: Map<number, Option[]>; // userId -> the 2 options their 50/50 hid, this round only
@@ -141,7 +145,7 @@ export async function submitAnswer(roomId: number, userId: number, option: Optio
   if ((memberRows as any[]).length === 0) return { error: 'You are not in this room' };
 
   if (state.current.answers.has(userId)) return { error: 'You already answered this round' };
-  state.current.answers.set(userId, option);
+  state.current.answers.set(userId, { option, answeredAt: Date.now() });
 
   const [joinedRows] = await db.execute(
     'SELECT COUNT(*) as n FROM trivia_room_players WHERE room_id = ? AND status = "joined"',
@@ -254,9 +258,14 @@ async function revealRound(roomId: number) {
   const room = (roomRows as any[])[0];
   if (!room) return;
 
-  for (const [userId, option] of round.answers) {
+  const pointsEarned: Record<number, number> = {};
+  for (const [userId, { option, answeredAt }] of round.answers) {
     if (option === round.correctOption) {
-      await db.execute('UPDATE trivia_room_players SET score = score + ? WHERE room_id = ? AND user_id = ?', [POINTS_PER_CORRECT, roomId, userId]);
+      const timeLeftMs = Math.max(0, round.deadline - answeredAt);
+      const speedBonus = Math.round(SPEED_BONUS_MAX * (timeLeftMs / ROUND_MS));
+      const points = POINTS_PER_CORRECT + speedBonus;
+      pointsEarned[userId] = points;
+      await db.execute('UPDATE trivia_room_players SET score = score + ? WHERE room_id = ? AND user_id = ?', [points, roomId, userId]);
     }
   }
 
@@ -268,7 +277,7 @@ async function revealRound(roomId: number) {
     [roomId]
   ) as any[];
   const scores = Object.fromEntries((playerRows as any[]).map(p => [p.user_id, p.score]));
-  const answersOut = Object.fromEntries([...round.answers.entries()]);
+  const answersOut = Object.fromEntries([...round.answers.entries()].map(([userId, a]) => [userId, a.option]));
 
   const isLastRound = room.current_round >= room.total_rounds;
   let matchWinnerId: number | null = null;
@@ -287,6 +296,7 @@ async function revealRound(roomId: number) {
     correct_option: round.correctOption,
     correct_answer_text: round.options[round.correctOption],
     answers: answersOut,
+    points_earned: pointsEarned,
     scores,
     match_winner_id: isLastRound ? matchWinnerId : undefined,
     match_finished: isLastRound,
