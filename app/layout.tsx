@@ -9,6 +9,8 @@ import GlobalCallManager from './components/GlobalCallManager';
 import NavBar from './components/NavBar';
 import ChatPanel from './components/ChatPanel';
 import BottomNav from './components/BottomNav';
+import LeftRail from './components/LeftRail';
+import RightRail from './components/RightRail';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -60,7 +62,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SocketProvider token={token}>
           {session && <NavBar user={session} siteName={siteName} />}
           <GlobalCallManager />
-          {children}
+          {session ? (
+            <div className="max-w-7xl mx-auto lg:px-4 flex gap-6 items-start">
+              <LeftRail user={session} />
+              <div className="flex-1 min-w-0">{children}</div>
+              <RightRail />
+            </div>
+          ) : children}
           {session && <BottomNav user={session} />}
           {session && <ChatPanel currentUser={session} />}
         </SocketProvider>
