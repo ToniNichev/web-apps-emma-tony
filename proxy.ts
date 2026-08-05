@@ -11,6 +11,11 @@ const publicPaths = [
   '/forgot-password',
   '/api/auth/forgot-password',
   '/api/auth/reset-password',
+  // Passkey login happens before the user has an auth cookie, same as
+  // /api/auth/login above — register-options/verify are deliberately NOT
+  // here, since adding a passkey requires an existing signed-in session.
+  '/api/auth/passkey/login-options',
+  '/api/auth/passkey/login-verify',
 ];
 
 export async function proxy(request: import('next/server').NextRequest) {
