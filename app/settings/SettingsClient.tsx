@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AVATAR_EMOJIS, AVATAR_COLORS, AVATAR_ACCESSORIES, colorHex } from '@/app/lib/avatar-options';
+import PasskeySettings from './PasskeySettings';
 
 const THEMES = [
   { id: 'bloom',    label: 'Bloom',    from: '#f472b6', to: '#a855f7' },
@@ -410,6 +411,8 @@ export default function SettingsClient({ user }: Props) {
           </button>
         </form>
       </div>
+
+      <PasskeySettings />
     </div>
   );
 }

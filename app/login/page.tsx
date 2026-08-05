@@ -1,7 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 
 function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; onClose: () => void }) {
   const [email, setEmail] = useState(initialEmail);
@@ -72,6 +73,37 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
+  useEffect(() => {
+    setPasskeySupported(browserSupportsWebAuthn());
+  }, []);
+
+  async function handlePasskeyLogin() {
+    setError('');
+    setPasskeyLoading(true);
+    try {
+      const optionsRes = await fetch('/api/auth/passkey/login-options', { method: 'POST' });
+      const options = await optionsRes.json();
+      const assertion = await startAuthentication({ optionsJSON: options });
+      const verifyRes = await fetch('/api/auth/passkey/login-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assertion),
+      });
+      if (verifyRes.ok) {
+        router.push('/');
+        router.refresh();
+      } else {
+        const data = await verifyRes.json().catch(() => ({}));
+        setError(data.message || 'Passkey sign-in failed');
+      }
+    } catch {
+      // User cancelled the browser's passkey prompt — not an error worth showing.
+    }
+    setPasskeyLoading(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,6 +135,23 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-8">
+          {passkeySupported && (
+            <>
+              <button
+                type="button"
+                onClick={handlePasskeyLogin}
+                disabled={passkeyLoading}
+                className="w-full border-2 border-pink-200 text-pink-600 font-semibold py-3 rounded-xl hover:bg-pink-50 transition disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                🔐 {passkeyLoading ? 'Waiting…' : 'Sign in with a passkey'}
+              </button>
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 font-medium">or</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+            </>
+          )}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
