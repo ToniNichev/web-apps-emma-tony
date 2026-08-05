@@ -25,12 +25,12 @@ export default function BottomNav({ user }: {
           <span className="text-[10px] font-medium">Home</span>
         </Link>
 
-        {/* Search */}
-        <Link href="/search" className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition ${active('/search') ? 'brand-text' : 'text-gray-400'}`}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z" />
-          </svg>
-          <span className="text-[10px] font-medium">Search</span>
+        {/* Play — swapped in for Search: low-value in a small family circle,
+            while the games are probably the single biggest draw for kids.
+            Search is still reachable at /search, just not a fixed tab. */}
+        <Link href="/play" className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition ${active('/play') ? 'brand-text' : 'text-gray-400'}`}>
+          <span className="text-xl leading-none">🎮</span>
+          <span className="text-[10px] font-medium">Play</span>
         </Link>
 
         {/* Create — centre accent button */}

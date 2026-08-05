@@ -114,34 +114,11 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
                 >
                   <span>⚙️</span> Settings
                 </Link>
-                <Link
-                  href="/challenges"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <span>🎯</span> Challenges
-                </Link>
-                <Link
-                  href="/leaderboard"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <span>🏆</span> Leaderboard
-                </Link>
-                <Link
-                  href="/kindness"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <span>💛</span> Kindness Wall
-                </Link>
-                <Link
-                  href="/play"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                >
-                  <span>🎮</span> Play
-                </Link>
+                {/* Play/Challenges/Kindness/Leaderboard deliberately live outside
+                    this menu now — always-visible via the left rail (desktop)
+                    and the quick-links strip + bottom nav (mobile/tablet)
+                    instead of nested behind the profile circle. This menu is
+                    account actions only. */}
                 {user.is_admin ? (
                   <Link
                     href="/admin"
