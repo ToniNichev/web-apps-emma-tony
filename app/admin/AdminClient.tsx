@@ -41,6 +41,7 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
   const [challengeDate, setChallengeDate] = useState(new Date().toISOString().slice(0, 10));
   const [challengeSaving, setChallengeSaving] = useState(false);
   const [challengeSaved, setChallengeSaved] = useState(false);
+  const [challengeSuggestions, setChallengeSuggestions] = useState<any[]>([]);
   const [kindnessReports, setKindnessReports] = useState<any[]>([]);
   const [hangoutReports, setHangoutReports] = useState<any[]>([]);
   const [triviaHealth, setTriviaHealth] = useState<any[]>([]);
@@ -71,7 +72,35 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     if (tab === 'trivia') {
       loadTrivia();
     }
+    if (tab === 'challenge') {
+      loadChallengeSuggestions();
+    }
   }, [tab]);
+
+  async function loadChallengeSuggestions() {
+    const data = await fetch('/api/admin/challenge-suggestions').then(r => r.json());
+    setChallengeSuggestions(data);
+  }
+
+  function useSuggestion(s: any) {
+    setChallengePrompt(s.prompt);
+    setChallengeEmoji(s.emoji);
+    fetch(`/api/admin/challenge-suggestions/${s.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' }),
+    });
+    setChallengeSuggestions(cs => cs.filter(c => c.id !== s.id));
+  }
+
+  function dismissSuggestion(id: number) {
+    fetch(`/api/admin/challenge-suggestions/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    setChallengeSuggestions(cs => cs.filter(c => c.id !== id));
+  }
 
   async function loadTrivia() {
     const data = await fetch('/api/admin/trivia').then(r => r.json());
@@ -658,6 +687,40 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
       {/* ── Challenge tab ── */}
       {tab === 'challenge' && (
         <div className="space-y-4">
+          <div className="card p-6 space-y-4">
+            <div>
+              <p className="font-semibold text-gray-700 text-sm mb-1">Suggestions ({challengeSuggestions.length})</p>
+              <p className="text-xs text-gray-400">Ideas submitted by users. "Use this" fills in the form below — you still need to hit Set challenge.</p>
+            </div>
+            {challengeSuggestions.length === 0 ? (
+              <p className="text-sm text-gray-400">No pending suggestions.</p>
+            ) : (
+              <div className="space-y-2">
+                {challengeSuggestions.map(s => (
+                  <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100">
+                    <span className="text-xl flex-shrink-0">{s.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700">{s.prompt}</p>
+                      <p className="text-xs text-gray-400">from {s.first_name} (@{s.username})</p>
+                    </div>
+                    <button
+                      onClick={() => useSuggestion(s)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full brand-gradient text-white hover:opacity-90 transition flex-shrink-0"
+                    >
+                      Use this
+                    </button>
+                    <button
+                      onClick={() => dismissSuggestion(s.id)}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 hover:border-pink-300 hover:text-pink-500 transition flex-shrink-0"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="card p-6 space-y-4">
             <div>
               <p className="font-semibold text-gray-700 text-sm mb-1">Daily Challenge</p>

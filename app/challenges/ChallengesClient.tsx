@@ -109,6 +109,78 @@ function ResponseModal({ challenge, onClose, onDone }: { challenge: Challenge; o
   );
 }
 
+function SuggestModal({ onClose }: { onClose: () => void }) {
+  const [emoji, setEmoji] = useState('🌟');
+  const [prompt, setPrompt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (!prompt.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch('/api/challenge/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, emoji }),
+    });
+    setSubmitting(false);
+    if (res.ok) {
+      setDone(true);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.message || 'Something went wrong');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4 pb-4 sm:pb-0" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="brand-gradient px-5 py-4 flex items-center gap-3">
+          <span className="text-2xl">💡</span>
+          <p className="text-white font-bold text-sm leading-snug">Suggest a challenge</p>
+        </div>
+        {done ? (
+          <div className="p-6 text-center space-y-3">
+            <p className="text-3xl">✨</p>
+            <p className="text-sm text-gray-600">Sent! An admin will take a look.</p>
+            <button onClick={onClose} className="brand-gradient text-white font-semibold px-5 py-2 rounded-full text-sm hover:opacity-90 transition">
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4">
+            <div className="flex gap-3">
+              <input
+                value={emoji}
+                onChange={e => setEmoji(e.target.value)}
+                maxLength={2}
+                className="w-16 flex-shrink-0 border border-gray-200 rounded-xl px-3 py-2.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+              />
+              <input
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+                placeholder="Do a silly dance and post the video!"
+                maxLength={200}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400 transition"
+              />
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <button
+              onClick={submit}
+              disabled={submitting || !prompt.trim()}
+              className="w-full brand-gradient text-white font-semibold py-2.5 rounded-full text-sm hover:opacity-90 transition disabled:opacity-50"
+            >
+              {submitting ? 'Sending…' : 'Send suggestion'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ChallengesClient({ challenges: initial, currentUserId, today }: {
   challenges: Challenge[];
   currentUserId: number;
@@ -121,6 +193,7 @@ export default function ChallengesClient({ challenges: initial, currentUserId, t
     return s;
   });
   const [responding, setResponding] = useState<Challenge | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
 
   function toggle(id: number) {
     setExpanded(s => {
@@ -136,16 +209,33 @@ export default function ChallengesClient({ challenges: initial, currentUserId, t
 
   if (challenges.length === 0) {
     return (
-      <div className="card p-12 text-center">
-        <p className="text-4xl mb-3">🎯</p>
-        <p className="text-gray-500 font-medium">No challenges yet!</p>
-        <p className="text-sm text-gray-400 mt-1">Check back once an admin sets the first one.</p>
-      </div>
+      <>
+        <div className="card p-12 text-center">
+          <p className="text-4xl mb-3">🎯</p>
+          <p className="text-gray-500 font-medium">No challenges yet!</p>
+          <p className="text-sm text-gray-400 mt-1">Check back once an admin sets the first one.</p>
+          <button
+            onClick={() => setSuggesting(true)}
+            className="mt-4 border border-pink-200 text-pink-500 hover:bg-pink-50 font-semibold px-4 py-2 rounded-full text-sm transition"
+          >
+            💡 Suggest a challenge
+          </button>
+        </div>
+        {suggesting && <SuggestModal onClose={() => setSuggesting(false)} />}
+      </>
     );
   }
 
   return (
     <>
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={() => setSuggesting(true)}
+          className="border border-pink-200 text-pink-500 hover:bg-pink-50 font-semibold px-4 py-2 rounded-full text-sm transition"
+        >
+          💡 Suggest a challenge
+        </button>
+      </div>
       <div className="space-y-4">
         {challenges.map(c => {
           const isToday = c.active_date === today;
@@ -239,6 +329,7 @@ export default function ChallengesClient({ challenges: initial, currentUserId, t
           onDone={updated => { onDone(updated); setExpanded(s => new Set([...s, updated.id])); }}
         />
       )}
+      {suggesting && <SuggestModal onClose={() => setSuggesting(false)} />}
     </>
   );
 }
