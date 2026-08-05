@@ -156,7 +156,7 @@ export default function ChallengesClient({ challenges: initial, currentUserId, t
           return (
             <div key={c.id} className="card overflow-hidden">
               {/* Header */}
-              <div className={`px-5 py-4 flex items-center gap-3 ${isToday ? 'brand-gradient' : isFuture ? 'bg-gradient-to-r from-gray-100 to-gray-50' : 'bg-gradient-to-r from-pink-50 to-purple-50'}`}>
+              <div className={`px-5 py-4 flex items-center gap-3 ${isToday ? 'brand-gradient' : isFuture ? 'challenge-header-future' : 'challenge-header-past'}`}>
                 <span className="text-3xl">{c.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

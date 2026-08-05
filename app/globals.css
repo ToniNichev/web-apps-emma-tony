@@ -68,6 +68,17 @@ body { background-color: #f9fafb; }
   animation: trivia-timer-blink 0.5s ease-in-out infinite;
 }
 
+/* ── Challenge history cards (past / upcoming headers) ───── */
+/* Plain bg-gradient-to-r utilities here had no dark counterpart, while the
+   prompt text (text-gray-800) picks up the app-wide dark-mode override that
+   turns it light — light text stuck on a background that never went dark. */
+.challenge-header-past {
+  background: linear-gradient(to right, #fdf2f8, #faf5ff);
+}
+.challenge-header-future {
+  background: linear-gradient(to right, #f3f4f6, #f9fafb);
+}
+
 /* ── Trivia win confetti ─────────────────────────────────── */
 .trivia-confetti-container {
   position: fixed;
@@ -104,6 +115,13 @@ html.dark body {
 html.dark .card {
   background: #1e293b;
   box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+html.dark .challenge-header-past {
+  background: linear-gradient(to right, #831843, #581c87);
+}
+html.dark .challenge-header-future {
+  background: linear-gradient(to right, #334155, #1e293b);
 }
 
 /* Nav / white surfaces */
