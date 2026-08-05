@@ -6,7 +6,7 @@ import db from './db';
 // instant they happen). Deliberately excludes posts (already permanent on
 // the profile), logins, and anything from activity_log (that's the
 // superadmin oversight log — IPs and DM previews, not for user display).
-export type RiverEventType = 'badge' | 'trivia_win' | 'rps_win' | 'kindness_received';
+export type RiverEventType = 'badge' | 'trivia_win' | 'rps_win' | 'kindness_received' | 'challenge_picked';
 
 // Fire-and-forget — never throws, never blocks the caller.
 export function logRiverEvent(userId: number, eventType: RiverEventType, summary: string, emoji: string) {

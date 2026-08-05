@@ -66,6 +66,11 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     const userId = socket.user.id;
     socket.join(`user:${userId}`);
+    // Family Chat is a single shared room for everyone, not per-conversation
+    // like DMs — every authenticated connection just joins it, no explicit
+    // join/leave event needed. Posting goes through the REST route
+    // (app/api/family-chat/route.ts), which pushes here after persisting.
+    socket.join('family_chat');
     socket.hangoutRooms = new Set();
     console.log(`[SOCKET] Connected: ${socket.user.username} (id:${userId}) via ${socket.conn.transport.name}`);
 

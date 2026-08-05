@@ -450,6 +450,17 @@ export default function MessagesClient({
       <div className={`${activeConvo ? 'hidden md:flex' : 'flex'} w-full md:w-72 border-r border-gray-100 flex-col flex-shrink-0`}>
         <div className="p-4 border-b border-gray-100 font-bold text-gray-800">Messages</div>
         <div className="overflow-y-auto flex-1">
+          {/* Family Chat entry — separate page, not an in-place conversation
+              like DMs/Luna, since it's a whole different (much simpler) data
+              model: one shared room instead of a 1:1 conversation. */}
+          <a href="/family-chat"
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-orange-50 transition text-left border-b border-orange-100">
+            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg flex-shrink-0">🏡</div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-orange-800">Family Chat</p>
+              <p className="text-xs text-orange-400 truncate">Say hi to everyone</p>
+            </div>
+          </a>
           {/* Luna entry */}
           <button onClick={() => openConvo(LUNA_CONVO)}
             className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition text-left border-b border-purple-100 ${inLuna ? 'bg-purple-50' : ''}`}>
