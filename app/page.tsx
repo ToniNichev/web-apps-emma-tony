@@ -9,6 +9,7 @@ import StoriesBar from '@/app/components/StoriesBar';
 import { POSTS_PAGE_SIZE } from '@/app/lib/constants';
 import RightNowBanner from '@/app/components/RightNowBanner';
 import DailyChallenge from '@/app/components/DailyChallenge';
+import { getOnThisDayPosts } from '@/app/lib/memories';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export default async function HomePage() {
   const hiddenFilter = isSuperAdmin ? '' : 'AND (p.hidden IS NULL OR p.hidden = 0)';
   const today = new Date().toISOString().slice(0, 10);
 
-  const [settings, stories, posts, birthdayResult, challengeResult] = await Promise.all([
+  const [settings, stories, posts, birthdayResult, challengeResult, onThisDay] = await Promise.all([
     getSiteSettings(),
 
     db.execute(`
@@ -75,6 +76,8 @@ export default async function HomePage() {
        FROM daily_challenges dc WHERE dc.active_date = ?`,
       [session.id, today]
     ),
+
+    getOnThisDayPosts(session.id, isSuperAdmin),
   ]);
 
   const storyRows = (stories as any[][])[0] as any[];
@@ -163,6 +166,40 @@ export default async function HomePage() {
         </div>
       ))}
       <DailyChallenge initial={challengeWithResponses} />
+
+      {onThisDay.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">📼 On this day</p>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {onThisDay.map((m: any) => {
+              const mediaUrls = m.media_urls?.split('||').filter(Boolean) || [];
+              const mediaTypes = m.media_types?.split('||').filter(Boolean) || [];
+              const mediaThumbs = m.media_thumbnails?.split('||') || [];
+              const isVideo = mediaTypes[0] === 'video';
+              const thumb = isVideo ? (mediaThumbs[0] || null) : mediaUrls[0];
+              return (
+                <a
+                  key={m.id}
+                  href={`/post/${m.id}`}
+                  className="flex-shrink-0 w-36 card overflow-hidden hover:opacity-90 transition"
+                >
+                  {thumb ? (
+                    <img src={thumb} alt="" className="w-full h-28 object-cover" />
+                  ) : (
+                    <div className="w-full h-28 brand-gradient flex items-center justify-center px-3">
+                      <p className="text-white text-xs font-medium text-center line-clamp-4">{m.content}</p>
+                    </div>
+                  )}
+                  <div className="p-2">
+                    <p className="text-[10px] font-semibold brand-text">{m.memory_label}</p>
+                    <p className="text-xs text-gray-500 truncate">{m.first_name}</p>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {postRows.length === 0 ? (
         <div className="card p-12 text-center">
