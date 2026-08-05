@@ -1,5 +1,6 @@
 import db from './db';
 import { getRandomQuestions, recordQuestionAsked, checkAndRegenerateIfStale, CATEGORIES, type Category } from './trivia';
+import { logRiverEvent } from './river';
 
 const ROUND_MS = 15_000;
 const REVEAL_PAUSE_MS = 4_000; // time players see the answer before the next round auto-starts
@@ -273,7 +274,8 @@ async function revealRound(roomId: number) {
   checkAndRegenerateIfStale(round.questionCategory).catch(() => {});
 
   const [playerRows] = await db.execute(
-    'SELECT user_id, score FROM trivia_room_players WHERE room_id = ?',
+    `SELECT gp.user_id, gp.score, u.first_name FROM trivia_room_players gp
+     JOIN users u ON u.id = gp.user_id WHERE gp.room_id = ?`,
     [roomId]
   ) as any[];
   const scores = Object.fromEntries((playerRows as any[]).map(p => [p.user_id, p.score]));
@@ -287,6 +289,14 @@ async function revealRound(roomId: number) {
     matchWinnerId = winners.length === 1 ? winners[0].user_id : null;
     await db.execute('UPDATE trivia_rooms SET status = "finished", expires_at = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?', [roomId]);
     clearRoomState(roomId);
+    if (matchWinnerId) {
+      // Trivia Duel supports more than 2 players, so only name an opponent
+      // when there's exactly one — otherwise "vs X" would misrepresent a
+      // multi-player match.
+      const others = (playerRows as any[]).filter(p => p.user_id !== matchWinnerId);
+      const suffix = others.length === 1 ? ` vs ${others[0].first_name}` : '';
+      logRiverEvent(matchWinnerId, 'trivia_win', `Won a Trivia Duel${suffix}`, '🧠');
+    }
   }
 
   const io = gameIO();

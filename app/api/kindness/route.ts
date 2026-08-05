@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
 import { checkBadges } from '@/app/lib/badges';
+import { logRiverEvent } from '@/app/lib/river';
 import { isPromptSafe } from '@/app/lib/moderation';
 import { rateLimit } from '@/app/lib/rate-limit';
 
@@ -64,6 +65,9 @@ export async function POST(request: Request) {
     'INSERT INTO notifications (user_id, actor_id, type) VALUES (?, ?, "kindness_note")',
     [recipientId, session.id]
   );
+
+  // No sender identity in the river event either — same anonymity rule as the note itself.
+  logRiverEvent(recipientId, 'kindness_received', 'Received a kindness note', '💛');
 
   checkBadges(session.id).catch(() => {});
 

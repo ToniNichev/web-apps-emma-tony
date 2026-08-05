@@ -1,4 +1,5 @@
 import db from './db';
+import { logRiverEvent } from './river';
 
 export interface Badge {
   id: string;
@@ -23,10 +24,17 @@ export const BADGES: Badge[] = [
 ];
 
 async function award(userId: number, badgeId: string) {
-  await db.execute(
+  const [result] = await db.execute(
     'INSERT IGNORE INTO user_badges (user_id, badge_id) VALUES (?, ?)',
     [userId, badgeId]
-  );
+  ) as any[];
+  // affectedRows is 0 when INSERT IGNORE skipped a duplicate — only log the
+  // river event the moment a badge is actually newly earned, not on every
+  // recheck (checkBadges reruns all conditions on most user actions).
+  if ((result as any).affectedRows > 0) {
+    const badge = BADGES.find(b => b.id === badgeId);
+    if (badge) logRiverEvent(userId, 'badge', `Earned the ${badge.label} badge`, badge.emoji);
+  }
 }
 
 export async function checkBadges(userId: number) {

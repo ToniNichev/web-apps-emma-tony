@@ -1,4 +1,5 @@
 import db from './db';
+import { logRiverEvent } from './river';
 
 type Move = 'rock' | 'paper' | 'scissors';
 export const MOVES: Move[] = ['rock', 'paper', 'scissors'];
@@ -35,7 +36,8 @@ export async function submitPick(roomId: number, userId: number, move: Move) {
   if (room.status !== 'active') return { error: 'Match is not active' };
 
   const [playerRows] = await db.execute(
-    'SELECT user_id, status, score FROM rps_room_players WHERE room_id = ?',
+    `SELECT gp.user_id, gp.status, gp.score, u.first_name FROM rps_room_players gp
+     JOIN users u ON u.id = gp.user_id WHERE gp.room_id = ?`,
     [roomId]
   ) as any[];
   const players = playerRows as any[];
@@ -85,7 +87,11 @@ export async function submitPick(roomId: number, userId: number, move: Move) {
       : 'UPDATE rps_rooms SET round = ?, status = "active" WHERE id = ?',
     [nextRound, roomId]
   );
-  if (matchWinnerId) clearRoomState(roomId);
+  if (matchWinnerId) {
+    clearRoomState(roomId);
+    const loserName = matchWinnerId === userId ? opponent.first_name : me.first_name;
+    logRiverEvent(matchWinnerId, 'rps_win', `Won Rock Paper Scissors vs ${loserName}`, '✊');
+  }
 
   const io = gameIO();
   io?.to(`rps:${roomId}`).emit('rps:round_result', {

@@ -8,8 +8,19 @@ import MessageButton from '@/app/components/MessageButton';
 import KindnessButton from '@/app/components/KindnessButton';
 import { getPostingStreak } from '@/app/lib/streaks';
 import { getUserBadges } from '@/app/lib/badges';
+import { getRiverEvents } from '@/app/lib/river';
 
 export const dynamic = 'force-dynamic';
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export default async function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const session = await getSession();
@@ -64,7 +75,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   const isFollowing = (isFollowingRows as any[]).length > 0;
   const theyFollowMe = (theyFollowMeRows as any[]).length > 0;
   const isOwn = session.id === user.id;
-  const [streak, badges] = await Promise.all([getPostingStreak(user.id), getUserBadges(user.id)]);
+  const [streak, badges, riverEvents] = await Promise.all([
+    getPostingStreak(user.id), getUserBadges(user.id), getRiverEvents(user.id),
+  ]);
 
   return (
     <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
@@ -131,6 +144,22 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
           )}
         </div>
       </div>
+
+      {/* Highlights river */}
+      {riverEvents.length > 0 && (
+        <div className="card p-4 mb-6">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">🏆 Highlights</p>
+          <div className="space-y-2.5">
+            {riverEvents.map((e, i) => (
+              <div key={i} className="flex items-center gap-2.5 text-sm">
+                <span className="text-lg leading-none">{e.emoji}</span>
+                <span className="text-gray-700 flex-1">{e.summary}</span>
+                <span className="text-xs text-gray-400 whitespace-nowrap">{timeAgo(e.created_at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Posts */}
       <div className="space-y-4">
