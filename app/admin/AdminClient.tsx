@@ -231,6 +231,15 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
     setUsers(us => us.map(u => u.id === userId ? { ...u, is_admin: current ? 0 : 1 } : u));
   }
 
+  async function toggleFamily(userId: number, current: number) {
+    await fetch(`/api/admin/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ family: current ? 0 : 1 }),
+    });
+    setUsers(us => us.map(u => u.id === userId ? { ...u, family: current ? 0 : 1 } : u));
+  }
+
   async function deleteUser(userId: number) {
     await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
     setUsers(us => us.filter(u => u.id !== userId));
@@ -486,9 +495,21 @@ export default function AdminClient({ isSuperAdmin = false }: { isSuperAdmin?: b
                 <div className="flex items-center gap-1.5">
                   <p className="font-semibold text-sm">{u.first_name} {u.last_name}</p>
                   {u.is_admin >= 2 ? <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full font-semibold">Super admin</span> : u.is_admin === 1 ? <span className="text-xs brand-gradient text-white px-2 py-0.5 rounded-full font-semibold">Admin</span> : null}
+                  {u.family
+                    ? <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">🏡 Family</span>
+                    : <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Friend</span>
+                  }
                 </div>
                 <p className="text-xs text-gray-400">@{u.username}{isSuperAdmin && u.email ? ` · ${u.email}` : ''}</p>
               </div>
+              {isSuperAdmin && (
+                <button
+                  onClick={() => toggleFamily(u.id, u.family)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition flex-shrink-0 ${u.family ? 'border-orange-200 text-orange-500 hover:bg-orange-50' : 'border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-500'}`}
+                >
+                  {u.family ? 'Mark as friend' : 'Mark as family'}
+                </button>
+              )}
               {isSuperAdmin && (
                 <button
                   onClick={() => toggleAdmin(u.id, u.is_admin)}

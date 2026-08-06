@@ -66,11 +66,16 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     const userId = socket.user.id;
     socket.join(`user:${userId}`);
-    // Family Chat is a single shared room for everyone, not per-conversation
-    // like DMs — every authenticated connection just joins it, no explicit
-    // join/leave event needed. Posting goes through the REST route
+    // Family Chat is a single shared room, not per-conversation like DMs —
+    // every authenticated connection with the family flag just joins it, no
+    // explicit join/leave event needed. Posting goes through the REST route
     // (app/api/family-chat/route.ts), which pushes here after persisting.
-    socket.join('family_chat');
+    // Gating on socket.user.family (baked into the JWT at login) rather than
+    // a DB check here — this file has no DB access of its own. Tokens signed
+    // before this field existed decode with family === undefined, not 1, so
+    // this fails open (only an explicit 0 excludes) instead of locking out
+    // everyone with a pre-existing login.
+    if (socket.user.family !== 0) socket.join('family_chat');
     socket.hangoutRooms = new Set();
     console.log(`[SOCKET] Connected: ${socket.user.username} (id:${userId}) via ${socket.conn.transport.name}`);
 

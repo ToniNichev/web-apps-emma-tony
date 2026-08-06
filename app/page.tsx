@@ -155,7 +155,7 @@ export default async function HomePage() {
       )}
 
       <StoriesBar initialStories={storyGroups} currentUserId={session.id} />
-      <QuickLinks />
+      <QuickLinks family={session.family} />
       <RightNowBanner />
       {birthdayUsers.map((u: any) => (
         <div key={u.id} className="mb-4 rounded-2xl bg-gradient-to-r from-pink-400 to-yellow-400 px-5 py-4 flex items-center gap-4">

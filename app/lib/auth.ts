@@ -11,6 +11,7 @@ export interface JWTPayload {
   email: string;
   profile_picture: string | null;
   is_admin: number;
+  family: number;
 }
 
 export function signJWT(payload: JWTPayload): string {

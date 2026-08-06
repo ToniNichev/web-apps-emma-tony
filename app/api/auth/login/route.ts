@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     email: user.email,
     profile_picture: user.profile_picture,
     is_admin: user.is_admin,
+    family: user.family,
   });
 
   const cookieOpts = { httpOnly: false, secure: true, sameSite: 'lax' as const, path: '/' };

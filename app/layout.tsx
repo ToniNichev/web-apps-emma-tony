@@ -66,7 +66,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="max-w-7xl mx-auto lg:px-4 flex gap-6 items-start">
               <LeftRail user={session} />
               <div className="flex-1 min-w-0">{children}</div>
-              <RightRail />
+              <RightRail family={session.family} />
             </div>
           ) : children}
           {session && <BottomNav user={session} />}

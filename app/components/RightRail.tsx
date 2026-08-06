@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import db from '@/app/lib/db';
 
-export default async function RightRail() {
+export default async function RightRail({ family }: { family: number }) {
   const [[topPosters], [birthdays], [chatPreview]] = await Promise.all([
     db.execute(`
       SELECT u.id, u.username, u.first_name, u.profile_picture, COUNT(p.id) as post_count
@@ -75,19 +75,21 @@ export default async function RightRail() {
         </div>
       )}
 
-      <div className="card p-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">🏡 Family Chat</p>
-        {chats.length === 0 ? (
-          <p className="text-sm text-gray-400">No messages yet.</p>
-        ) : (
-          <div className="space-y-2 mb-3">
-            {chats.map((c: any, i: number) => (
-              <p key={i} className="text-xs text-gray-600 truncate"><span className="font-semibold text-gray-700">{c.first_name}:</span> {c.content}</p>
-            ))}
-          </div>
-        )}
-        <Link href="/family-chat" className="block text-xs brand-text font-semibold hover:underline">Open chat →</Link>
-      </div>
+      {family !== 0 ? (
+        <div className="card p-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">🏡 Family Chat</p>
+          {chats.length === 0 ? (
+            <p className="text-sm text-gray-400">No messages yet.</p>
+          ) : (
+            <div className="space-y-2 mb-3">
+              {chats.map((c: any, i: number) => (
+                <p key={i} className="text-xs text-gray-600 truncate"><span className="font-semibold text-gray-700">{c.first_name}:</span> {c.content}</p>
+              ))}
+            </div>
+          )}
+          <Link href="/family-chat" className="block text-xs brand-text font-semibold hover:underline">Open chat →</Link>
+        </div>
+      ) : null}
     </aside>
   );
 }

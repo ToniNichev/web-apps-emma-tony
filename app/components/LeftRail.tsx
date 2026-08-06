@@ -3,16 +3,17 @@ import { getPostingStreak } from '@/app/lib/streaks';
 
 const LINKS = [
   { href: '/play', emoji: '🎮', label: 'Play' },
-  { href: '/family-chat', emoji: '🏡', label: 'Family Chat' },
   { href: '/challenges', emoji: '🎯', label: 'Challenges' },
   { href: '/kindness', emoji: '💛', label: 'Kindness' },
   { href: '/leaderboard', emoji: '🏆', label: 'Leaderboard' },
 ];
+const FAMILY_LINK = { href: '/family-chat', emoji: '🏡', label: 'Family Chat' };
 
 export default async function LeftRail({ user }: {
-  user: { id: number; username: string; first_name: string; profile_picture?: string | null };
+  user: { id: number; username: string; first_name: string; profile_picture?: string | null; family: number };
 }) {
   const streak = await getPostingStreak(user.id);
+  const links = user.family !== 0 ? [LINKS[0], FAMILY_LINK, ...LINKS.slice(1)] : LINKS;
 
   return (
     <aside className="hidden lg:block w-56 flex-shrink-0 sticky top-[4.5rem] self-start space-y-3">
@@ -31,7 +32,7 @@ export default async function LeftRail({ user }: {
       </Link>
 
       <nav className="card p-2">
-        {LINKS.map(l => (
+        {links.map(l => (
           <Link key={l.href} href={l.href}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-pink-50 hover:text-pink-600 transition">
             <span className="text-lg">{l.emoji}</span>

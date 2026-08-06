@@ -9,6 +9,10 @@ const MAX_LENGTH = 1000;
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  // Sessions signed before this field existed decode with family === undefined,
+  // not 1 — only an explicit 0 (friend) should exclude, so this fails open
+  // rather than locking out everyone with a pre-existing login.
+  if (session.family === 0) return NextResponse.json({ message: 'Family Chat is just for family' }, { status: 403 });
 
   const [rows] = await db.execute(`
     SELECT * FROM (
@@ -27,6 +31,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (session.family === 0) return NextResponse.json({ message: 'Family Chat is just for family' }, { status: 403 });
 
   const { content } = await request.json();
   const trimmed = (content ?? '').trim();

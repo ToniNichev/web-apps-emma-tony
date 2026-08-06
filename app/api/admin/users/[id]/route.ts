@@ -14,6 +14,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await db.execute('UPDATE users SET is_admin = ? WHERE id = ?', [body.is_admin, id]);
   }
 
+  if (typeof body.family === 'number') {
+    if (session.is_admin < 2) return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    await db.execute('UPDATE users SET family = ? WHERE id = ?', [body.family, id]);
+  }
+
   return NextResponse.json({ ok: true });
 }
 

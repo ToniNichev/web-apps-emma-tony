@@ -11,14 +11,15 @@ const LINKS = [
   { href: '/challenges', emoji: '🎯', label: 'Challenges' },
   { href: '/kindness', emoji: '💛', label: 'Kindness' },
   { href: '/leaderboard', emoji: '🏆', label: 'Leaderboard' },
-  { href: '/family-chat', emoji: '🏡', label: 'Family Chat' },
 ];
+const FAMILY_LINK = { href: '/family-chat', emoji: '🏡', label: 'Family Chat' };
 
-export default function QuickLinks() {
+export default function QuickLinks({ family }: { family: number }) {
+  const links = family !== 0 ? [...LINKS, FAMILY_LINK] : LINKS;
   return (
     <div className="card p-4 mb-4 overflow-x-auto lg:hidden">
       <div className="flex gap-4 min-w-0">
-        {LINKS.map(l => (
+        {links.map(l => (
           <Link key={l.href} href={l.href} className="flex flex-col items-center gap-1 flex-shrink-0">
             <div className="w-16 h-16 rounded-full brand-gradient flex items-center justify-center text-2xl">
               {l.emoji}
