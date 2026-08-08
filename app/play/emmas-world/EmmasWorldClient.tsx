@@ -76,7 +76,7 @@ export default function EmmasWorldClient() {
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-      <canvas ref={canvasRef} className="w-full h-full" />
+      <canvas id="unity-canvas" ref={canvasRef} className="w-full h-full" />
       {!ready && !error && (
         <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
           Loading Emma&apos;s World... {Math.round(progress * 100)}%
