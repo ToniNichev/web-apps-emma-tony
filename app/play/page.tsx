@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 const GAMES = [
   { href: '/play/draw', emoji: '🎨', title: 'Draw & Guess', description: 'Take turns drawing and guessing the word!' },
   { href: '/play/hangout', emoji: '🏡', title: 'Hangout Room', description: 'Walk around, chat, and decorate a shared space with friends.' },
+  { href: '/play/emmas-world', emoji: '🧱', title: "Emma's World", description: 'Build together in a shared 3D world!' },
   { href: '/play/rps', emoji: '✊', title: 'Rock-Paper-Scissors', description: 'Challenge a friend — first to 3 wins!' },
   { href: '/play/trivia', emoji: '🧠', title: 'Trivia Duel', description: 'Test your knowledge — 8 questions, most correct wins!' },
 ];
