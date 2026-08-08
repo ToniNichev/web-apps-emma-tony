@@ -8,6 +8,7 @@ const LOADER_URL = `${BUILD_URL}/WebGL.loader.js`;
 
 interface UnityInstance {
   Quit: () => Promise<void>;
+  SetFullscreen: (fullscreen: number) => void;
 }
 
 declare global {
@@ -77,6 +78,14 @@ export default function EmmasWorldClient() {
   return (
     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
       <canvas id="unity-canvas" ref={canvasRef} className="w-full h-full" />
+      {ready && (
+        <button
+          onClick={() => instanceRef.current?.SetFullscreen(1)}
+          className="absolute top-2 right-2 z-10 rounded bg-black/60 px-3 py-1.5 text-xs text-white hover:bg-black/80"
+        >
+          Fullscreen
+        </button>
+      )}
       {!ready && !error && (
         <div className="absolute inset-0 flex items-center justify-center text-white text-sm">
           Loading Emma&apos;s World... {Math.round(progress * 100)}%
