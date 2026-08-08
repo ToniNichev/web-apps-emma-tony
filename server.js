@@ -63,6 +63,15 @@ app.prepare().then(() => {
   // client be sent an immediate snapshot instead of waiting on movement.
   const hangoutPresence = new Map();
 
+  // Emma's World (Unity building game) presence. Unlike Hangout Room this is
+  // a single shared world, not per-room -- so this maps userId -> last-known
+  // {x,y,z,rotation_y} directly, no room_id level. Block placements
+  // themselves are NOT relayed as raw socket events; they go through the
+  // validated Next.js API routes (app/api/emmas-world/blocks/*), which
+  // persist to MySQL and then push via this same shared `io`, exactly like
+  // hangout:object_placed does.
+  const emmasWorldPresence = new Map();
+
   io.on('connection', (socket) => {
     const userId = socket.user.id;
     socket.join(`user:${userId}`);
@@ -221,6 +230,38 @@ app.prepare().then(() => {
       });
     });
 
+    // Emma's World — pure relay for movement, same reasoning as Hangout
+    // Room's move handler above (low-stakes shared space, no anti-cheat
+    // needed). One implicit world, so join/leave/move don't take a room_id.
+    socket.on('emmasworld:join', () => {
+      socket.join('emmasworld');
+      socket.inEmmasWorld = true;
+      if (emmasWorldPresence.size > 0) {
+        const snapshot = [...emmasWorldPresence.entries()]
+          .filter(([uid]) => uid !== userId)
+          .map(([uid, p]) => ({ user_id: uid, ...p }));
+        if (snapshot.length > 0) socket.emit('emmasworld:snapshot', snapshot);
+      }
+    });
+    socket.on('emmasworld:leave', () => {
+      socket.to('emmasworld').emit('emmasworld:user_left', { user_id: userId });
+      socket.leave('emmasworld');
+      socket.inEmmasWorld = false;
+      emmasWorldPresence.delete(userId);
+    });
+    socket.on('emmasworld:move', ({ x, y, z, rotation_y }) => {
+      if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return;
+      const rotationVal = typeof rotation_y === 'number' ? rotation_y : 0;
+      emmasWorldPresence.set(userId, {
+        x, y, z, rotation_y: rotationVal,
+        first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
+      });
+      socket.to('emmasworld').emit('emmasworld:move', {
+        user_id: userId, x, y, z, rotation_y: rotationVal, t: Date.now(),
+        first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
+      });
+    });
+
     socket.on('disconnect', () => {
       console.log(`[SOCKET] Disconnected: ${socket.user.username}`);
       // hangout:leave_room only fires on an explicit "Leave room" click —
@@ -230,6 +271,10 @@ app.prepare().then(() => {
       for (const room_id of socket.hangoutRooms) {
         hangoutPresence.get(room_id)?.delete(userId);
         socket.to(`hangout:${room_id}`).emit('hangout:user_left', { user_id: userId });
+      }
+      if (socket.inEmmasWorld) {
+        emmasWorldPresence.delete(userId);
+        socket.to('emmasworld').emit('emmasworld:user_left', { user_id: userId });
       }
     });
   });
