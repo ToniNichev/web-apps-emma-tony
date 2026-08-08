@@ -77,7 +77,10 @@ export default function EmmasWorldClient() {
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-      <canvas id="unity-canvas" ref={canvasRef} className="w-full h-full" />
+      {/* touchAction: 'none' stops Safari/mobile browsers from treating drags
+          on the canvas (e.g. the on-screen joysticks) as page-scroll or
+          pull-to-refresh gestures instead of passing them to Unity. */}
+      <canvas id="unity-canvas" ref={canvasRef} className="w-full h-full" style={{ touchAction: 'none' }} />
       {ready && (
         <button
           onClick={() => instanceRef.current?.SetFullscreen(1)}
