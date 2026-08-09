@@ -22,13 +22,27 @@ declare global {
   }
 }
 
-export default function EmmasWorldClient() {
+export default function EmmasWorldClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const socket = useAppSocket();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const instanceRef = useRef<UnityInstance | null>(null);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+
+  const resetWorld = async () => {
+    if (!window.confirm("Clear every block in Emma's World? This can't be undone.")) return;
+    setResetting(true);
+    try {
+      const res = await fetch('/api/emmas-world/reset', { method: 'POST' });
+      if (!res.ok) window.alert('Reset failed.');
+    } catch {
+      window.alert('Reset failed.');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   // The EmmasWorldBridge.jslib plugin (Unity side) reads
   // window.__emmasWorldSocket directly on every call rather than caching a
@@ -87,6 +101,15 @@ export default function EmmasWorldClient() {
           className="absolute top-2 right-2 z-10 rounded bg-black/60 px-3 py-1.5 text-xs text-white hover:bg-black/80"
         >
           Fullscreen
+        </button>
+      )}
+      {ready && isAdmin && (
+        <button
+          onClick={resetWorld}
+          disabled={resetting}
+          className="absolute top-2 left-2 z-10 rounded bg-red-900/70 px-3 py-1.5 text-xs text-white hover:bg-red-800/80 disabled:opacity-50"
+        >
+          {resetting ? 'Resetting...' : 'Reset World'}
         </button>
       )}
       {!ready && !error && (
