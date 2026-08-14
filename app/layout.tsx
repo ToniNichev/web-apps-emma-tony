@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     maintenanceMode = s.maintenance_mode === '1';
   } catch {}
 
-  if (maintenanceMode) {
+  if (maintenanceMode && !session?.is_admin) {
     return (
       <html lang="en" className={classes || undefined}>
         <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased`}>
