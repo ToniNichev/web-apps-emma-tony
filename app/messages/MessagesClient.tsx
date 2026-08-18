@@ -553,7 +553,7 @@ export default function MessagesClient({
                         m.role === 'user'
                           ? 'brand-gradient text-white rounded-br-sm'
                           : isDark
-                            ? 'bg-white/90 text-gray-800 rounded-bl-sm'
+                            ? 'chat-bubble-on-dark rounded-bl-sm'
                             : 'bg-purple-100 text-purple-900 rounded-bl-sm'
                       }`}>
                         {m.image
@@ -594,7 +594,7 @@ export default function MessagesClient({
                     <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} ${prevSame ? 'mt-0.5' : 'mt-2'}`}>
                       <div className={`max-w-xs px-4 py-2 rounded-2xl text-sm leading-relaxed shadow-sm ${
                         isMe ? 'brand-gradient text-white rounded-br-sm'
-                          : isDark ? 'bg-white/90 text-gray-800 rounded-bl-sm'
+                          : isDark ? 'chat-bubble-on-dark rounded-bl-sm'
                           : 'bg-white text-gray-800 rounded-bl-sm'
                       }`}>{m.content}</div>
                     </div>

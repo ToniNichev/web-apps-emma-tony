@@ -12,6 +12,19 @@
 .theme-forest   { --brand-from:#4ade80; --brand-to:#2dd4bf; --brand-color:#22c55e; --brand-light:#f0fdf4; }
 .theme-midnight { --brand-from:#818cf8; --brand-to:#c084fc; --brand-color:#6366f1; --brand-light:#eef2ff; }
 
+/* ── Chat bubble over a dark wallpaper ───────────────────── */
+/* Deliberately fixed colors, independent of the global light/dark theme.
+   bg-white/90 is a distinct Tailwind class from bg-white (opacity variants
+   compile separately), so it never picks up the html.dark .bg-white
+   override — but text-gray-800 DOES get force-overridden to near-white by
+   the global dark-mode rule (meant for the rest of the app's dark
+   backgrounds), leaving light text stranded on a background that stayed
+   light. Same bug family as the Challenge History cards, one layer deeper. */
+.chat-bubble-on-dark {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+}
+
 /* ── Base ────────────────────────────────────────────────── */
 * { box-sizing: border-box; }
 
