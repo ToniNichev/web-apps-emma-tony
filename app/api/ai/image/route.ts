@@ -33,44 +33,26 @@ export async function POST(request: Request) {
       const send = (obj: object) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
       try {
-        const ollamaRes = await fetch('http://localhost:11434/api/generate', {
+        // Ollama removed image-generation support in v0.32.6+ with no re-enable
+        // timeline, so this now runs FLUX.2 Klein locally via mflux instead
+        // (shared with TrackThisRun's mflux-image-server, same machine).
+        // That server generates synchronously with no progress feed, so there's
+        // no progress line here — PaintingIndicator already renders fine without one.
+        const mfluxRes = await fetch(`${process.env.MFLUX_BASE_URL || 'http://localhost:8093'}/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'x/flux2-klein:latest',
-            prompt: styledPrompt,
-            stream: true,
-          }),
+          body: JSON.stringify({ prompt: styledPrompt }),
+          signal: AbortSignal.timeout(300000),
         });
 
-        if (!ollamaRes.ok || !ollamaRes.body) {
+        if (!mfluxRes.ok) {
           send({ error: 'Image generator unavailable' });
           controller.close();
           return;
         }
 
-        const reader = ollamaRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let imageBase64: string | null = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            let chunk: { image?: string; completed?: number; total?: number };
-            try { chunk = JSON.parse(line); } catch { continue; }
-            if (chunk.image) {
-              imageBase64 = chunk.image;
-            } else if (typeof chunk.completed === 'number' && typeof chunk.total === 'number' && chunk.total > 0) {
-              send({ progress: chunk.completed / chunk.total });
-            }
-          }
-        }
+        const data: { image?: string } = await mfluxRes.json();
+        const imageBase64 = data.image ?? null;
 
         if (!imageBase64) {
           send({ error: 'No image returned' });
