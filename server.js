@@ -71,6 +71,11 @@ app.prepare().then(() => {
   // persist to MySQL and then push via this same shared `io`, exactly like
   // hangout:object_placed does.
   const emmasWorldPresence = new Map();
+  // Per-user chat cooldown -- ephemeral speech bubbles have no persistence
+  // and no moderation pass (unlike family_chat, which fans out to a
+  // standing log everyone can scroll back through), so this is the one
+  // guard against a stuck key spamming bubbles for everyone else.
+  const emmasWorldChatCooldown = new Map();
 
   io.on('connection', (socket) => {
     const userId = socket.user.id;
@@ -260,6 +265,22 @@ app.prepare().then(() => {
         user_id: userId, x, y, z, rotation_y: rotationVal, t: Date.now(),
         first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
       });
+    });
+
+    // Emma's World chat -- pure ephemeral relay, same shape and reasoning
+    // as emmasworld:move above (low-stakes shared space, no anti-cheat).
+    // Nothing is stored: a client that joins mid-conversation simply never
+    // sees earlier bubbles, by design.
+    socket.on('emmasworld:chat', ({ text }) => {
+      if (typeof text !== 'string') return;
+      const trimmed = text.trim().slice(0, 120);
+      if (!trimmed) return;
+
+      const now = Date.now();
+      if (now - (emmasWorldChatCooldown.get(userId) || 0) < 1500) return;
+      emmasWorldChatCooldown.set(userId, now);
+
+      socket.to('emmasworld').emit('emmasworld:chat', { user_id: userId, text: trimmed });
     });
 
     socket.on('disconnect', () => {
