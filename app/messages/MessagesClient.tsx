@@ -330,6 +330,7 @@ export default function MessagesClient({
     setLunaStreaming(true);
     const failMsg = "Hmm, I couldn't hear that — try sending it again? 🌙";
     let accumulated = '';
+    let drawPrompt = '';
     try {
       // Ollama can get tied up if a painting is generating at the same time —
       // time out instead of leaving the bubble stuck on "thinking" forever.
@@ -353,12 +354,19 @@ export default function MessagesClient({
           if (!line.trim()) continue;
           try {
             const json = JSON.parse(line);
+            if (json.draw) drawPrompt = json.draw;
             if (json.message?.content) {
               accumulated += json.message.content;
               setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: accumulated }]);
             }
           } catch {}
         }
+      }
+      // She asked for a picture in plain chat — paint it instead of replying.
+      if (drawPrompt) {
+        await paintLunaImage(drawPrompt, content);
+        setLunaStreaming(false);
+        return;
       }
       // Loop finished but nothing ever arrived — don't leave the bubble stuck blank.
       if (!accumulated) {
@@ -373,22 +381,15 @@ export default function MessagesClient({
     setLunaStreaming(false);
   }
 
-  async function sendLunaImage() {
-    if (!text.trim() || lunaStreaming) return;
-    const prompt = text.trim();
-    setText('');
-    setShowEmoji(false);
-    setLunaMessages(ms => [
-      ...ms,
-      { role: 'user', content: `🎨 Draw: ${prompt}` },
-      { role: 'assistant', content: '', pending: 'image' },
-    ]);
-    setLunaStreaming(true);
+  // Swaps the trailing assistant bubble for a painting. `said` is the chat
+  // message that asked for it.
+  async function paintLunaImage(prompt: string, said: string) {
+    setLunaMessages(ms => [...ms.slice(0, -1), { role: 'assistant', content: '', pending: 'image' }]);
     try {
       const res = await fetch('/api/ai/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, said }),
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
@@ -426,7 +427,6 @@ export default function MessagesClient({
         { role: 'assistant', content: "I couldn't paint that one, try again? 🌙" },
       ]);
     }
-    setLunaStreaming(false);
   }
 
   function startVideoCall() {
@@ -470,7 +470,7 @@ export default function MessagesClient({
             <LunaAvatar />
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm text-purple-800">{lunaName} ✨ <span className="text-xs font-normal text-purple-400">AI friend</span></p>
-              <p className="text-xs text-purple-300 truncate">Ask me anything 🌙</p>
+              <p className="text-xs text-purple-300 truncate">Ask me anything, or say &ldquo;draw me…&rdquo; 🎨</p>
             </div>
           </button>
           {/* Regular conversations */}
@@ -541,6 +541,7 @@ export default function MessagesClient({
                     <div className="text-5xl">🌙</div>
                     <p className={`text-sm font-semibold ${isDark ? 'text-white/80' : 'text-purple-700'}`}>Hi! I&apos;m {lunaName} ✨</p>
                     <p className={`text-xs max-w-xs ${isDark ? 'text-white/60' : 'text-purple-400'}`}>I'm your magical AI friend. Ask me anything — jokes, stories, fun facts, games… 🎉</p>
+                    <p className={`text-xs max-w-xs ${isDark ? 'text-white/60' : 'text-purple-400'}`}>I can paint too! Just say <span className="font-semibold">&ldquo;{lunaName}, draw me a…&rdquo;</span> 🎨</p>
                   </div>
                 ) : (
                   lunaMessages.map((m, i) => (
@@ -615,15 +616,8 @@ export default function MessagesClient({
                 {showEmoji && <EmojiPicker onSelect={insertEmoji} />}
               </div>
               <input ref={inputRef} value={text} onChange={e => setText(e.target.value)}
-                placeholder={inLuna ? `Ask ${lunaName} anything, or describe a picture… 🌙` : 'Message…'}
+                placeholder={inLuna ? `Chat with ${lunaName}, or say “draw me a…” 🎨` : 'Message…'}
                 className="flex-1 min-w-0 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 transition" />
-              {inLuna && (
-                <button type="button" onClick={sendLunaImage} disabled={!text.trim() || lunaStreaming}
-                  title={`Ask ${lunaName} to draw this`}
-                  className="flex-shrink-0 text-lg p-1.5 rounded-full transition-all duration-150 disabled:opacity-40 bg-pink-100 hover:bg-pink-200 hover:scale-110 hover:shadow-md active:scale-95">
-                  🎨
-                </button>
-              )}
               <button type="submit" disabled={!text.trim() || (inLuna && lunaStreaming)}
                 className={`flex-shrink-0 text-white text-sm font-semibold px-4 py-2 rounded-full transition-all duration-150 disabled:opacity-40 disabled:hover:scale-100 hover:opacity-90 hover:scale-105 hover:shadow-md active:scale-95 ${inLuna ? 'bg-purple-600' : 'brand-gradient'}`}>
                 {inLuna && lunaStreaming ? '✨' : 'Send'}
