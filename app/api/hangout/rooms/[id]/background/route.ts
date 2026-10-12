@@ -5,8 +5,13 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '@/app/lib/db';
 import { getSession } from '@/app/lib/auth';
 import { isPromptSafe } from '@/app/lib/moderation';
+import { paintImage, startHeartbeat } from '@/app/lib/luna-painting';
 
 const MAX_PROMPT_LENGTH = 300;
+// Same 4:3 shape as the room (ROOM_W × ROOM_H), at about the pixel count of
+// Luna's 768px drawings so it takes about as long.
+const BG_WIDTH = 896;
+const BG_HEIGHT = 672;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -38,51 +43,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const encoder = new TextEncoder();
       const send = (obj: object) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
+      const stopHeartbeat = startHeartbeat(controller);
+
       try {
-        const ollamaRes = await fetch('http://localhost:11434/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'x/flux2-klein:latest',
-            prompt: styledPrompt,
-            stream: true,
-          }),
-        });
-
-        if (!ollamaRes.ok || !ollamaRes.body) {
-          send({ error: 'Image generator unavailable' });
-          controller.close();
-          return;
-        }
-
-        const reader = ollamaRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let imageBase64: string | null = null;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            let chunk: { image?: string; completed?: number; total?: number };
-            try { chunk = JSON.parse(line); } catch { continue; }
-            if (chunk.image) {
-              imageBase64 = chunk.image;
-            } else if (typeof chunk.completed === 'number' && typeof chunk.total === 'number' && chunk.total > 0) {
-              send({ progress: chunk.completed / chunk.total });
-            }
-          }
-        }
-
-        if (!imageBase64) {
-          send({ error: 'No image returned' });
-          controller.close();
-          return;
-        }
+        const imageBase64 = await paintImage(styledPrompt, BG_WIDTH, BG_HEIGHT);
 
         const buffer = Buffer.from(imageBase64, 'base64');
         const imgDir = path.join(process.cwd(), 'public', 'uploads', 'images');
@@ -113,9 +77,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         io?.to(`hangout:${roomId}`).emit('hangout:background_updated', { url });
 
         send({ url });
-        controller.close();
-      } catch {
+      } catch (err) {
+        console.error('[HANGOUT BG] generation failed:', err);
         send({ error: "Couldn't generate that background, try again?" });
+      } finally {
+        stopHeartbeat();
         controller.close();
       }
     },

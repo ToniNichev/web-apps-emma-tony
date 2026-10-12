@@ -140,7 +140,6 @@ export default function HangoutRoomClient({
   const [showBgPrompt, setShowBgPrompt] = useState(false);
   const [bgPrompt, setBgPrompt] = useState('');
   const [bgGenerating, setBgGenerating] = useState(false);
-  const [bgProgress, setBgProgress] = useState(0);
   const [bgError, setBgError] = useState<string | null>(null);
   const [showInvitePrompt, setShowInvitePrompt] = useState(false);
   const [inviteSelected, setInviteSelected] = useState<Set<number>>(new Set());
@@ -485,7 +484,6 @@ export default function HangoutRoomClient({
     e.preventDefault();
     if (!bgPrompt.trim()) return;
     setBgGenerating(true);
-    setBgProgress(0);
     setBgError(null);
     try {
       const res = await fetch(`/api/hangout/rooms/${roomId}/background`, {
@@ -507,7 +505,6 @@ export default function HangoutRoomClient({
           if (!line.trim()) continue;
           try {
             const data = JSON.parse(line);
-            if (typeof data.progress === 'number') setBgProgress(data.progress);
             if (data.url) { setBackground(data.url); setShowBgPrompt(false); setBgPrompt(''); }
             if (data.error) setBgError(data.error);
           } catch {}
@@ -746,7 +743,7 @@ export default function HangoutRoomClient({
               className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
             />
             <button type="submit" disabled={!bgPrompt.trim() || bgGenerating} className="brand-gradient text-white font-semibold px-4 py-2 rounded-full text-sm disabled:opacity-50">
-              {bgGenerating ? `${Math.round(bgProgress * 100)}%` : 'Generate'}
+              {bgGenerating ? 'Painting… 🎨' : 'Generate'}
             </button>
           </div>
           {bgError && <p className="text-xs text-red-500">{bgError}</p>}
