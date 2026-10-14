@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import DreamSky from '@/app/components/DreamSky';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -28,7 +29,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8">
+      <DreamSky seed={23} />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">

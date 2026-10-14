@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import DreamSky from '@/app/components/DreamSky';
 import { startAuthentication, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 
 function ForgotPasswordModal({ initialEmail, onClose }: { initialEmail: string; onClose: () => void }) {
@@ -125,7 +126,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <DreamSky seed={11} />
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">

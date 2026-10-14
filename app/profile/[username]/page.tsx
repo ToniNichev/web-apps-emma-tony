@@ -9,6 +9,7 @@ import KindnessButton from '@/app/components/KindnessButton';
 import { getPostingStreak } from '@/app/lib/streaks';
 import { getUserBadges } from '@/app/lib/badges';
 import { getRiverEvents } from '@/app/lib/river';
+import DreamSky from '@/app/components/DreamSky';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +82,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
 
   return (
     <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
+      <DreamSky
+        quiet
+        seed={user.id}
+        lanterns={(posts as any[]).map(p => ({ id: p.id, authorId: p.user_id, likes: Number(p.like_count) }))}
+      />
       {/* Profile card */}
       <div className="card overflow-hidden mb-6">
         <div className="h-24 brand-gradient" />

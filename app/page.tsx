@@ -11,6 +11,7 @@ import { POSTS_PAGE_SIZE } from '@/app/lib/constants';
 import RightNowBanner from '@/app/components/RightNowBanner';
 import DailyChallenge from '@/app/components/DailyChallenge';
 import { getOnThisDayPosts } from '@/app/lib/memories';
+import DreamSky from '@/app/components/DreamSky';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,6 +130,7 @@ export default async function HomePage() {
 
   return (
     <main className="max-w-2xl mx-auto px-4 pt-2 pb-6">
+      <DreamSky quiet lanterns={postRows.map(p => ({ id: p.id, authorId: p.user_id, likes: Number(p.like_count) }))} />
       {/* Welcome banner */}
       {showBanner && (
         <div className={`mb-4 rounded-2xl overflow-hidden ${bannerBg !== 'none' ? `post-bg-${bannerBg}` : 'bg-gradient-to-r from-pink-50 to-purple-50'}`}>
