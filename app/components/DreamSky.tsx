@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 // A twilight sky to sit behind the page: paper lanterns float past as you scroll (and drift
 // slowly toward you even when you don't), fireflies wander, clouds slide by under Luna's
 // moon, and now and then a shooting star, a paper plane or a unicorn with a rainbow
-// trail crosses. Same approach as toni-develops.com's post galaxy and TrackThisRun's
+// trail crosses, and a ballerina dances along the bottom. Same approach as toni-develops.com's post galaxy and TrackThisRun's
 // route field: a hand-rolled perspective projection on a 2D canvas.
 //
 // Lanterns can come from real posts (one per post, coloured by its author, bigger the more
@@ -222,6 +222,145 @@ function between([low, high]: [number, number], factor = 1): number {
   return (low + Math.random() * (high - low)) * factor;
 }
 
+// ---- The ballerina -------------------------------------------------------------------
+// A little dancer in a tutu who crosses the bottom of the sky every so often: tiny bourrée
+// steps, grand jetés, pirouettes and an arabesque glide. Like TrackThisRun's runners she is
+// posed afresh each frame from joint angles, but in 3D, so she can face the audience, turn
+// to profile for a leap and spin on the spot. Model units: +x is the way she travels, -y is
+// up with the tips of her pointe shoes on y = 0, and +z is her right side.
+
+type P3 = [number, number, number];
+type Limb = [number, number, number, number]; // upper segment [swing, side], lower [swing, side]
+type Pose = { lift: number; lean: number; facing: number; flare: number; legs: [Limb, Limb]; arms: [Limb, Limb] };
+type Move = 'bourree' | 'jete' | 'pirouette' | 'arabesque';
+type Step = [Move, number]; // and how many ms it lasts
+
+const THIGH = 19;
+const SHIN = 22; // down to the tip of the pointe shoe
+const HIP_Y = -(THIGH + SHIN);
+const TORSO = 18;
+const UPPER_ARM = 10.5;
+const FOREARM = 10;
+const FACING_AUDIENCE = Math.PI / 2; // travelling to her side, as dancers cross a stage
+const NEUTRAL_LEG: Limb = [0, -0.05, 0, -0.05];
+const ARMS_SECOND: Limb = [0.25, 1.15, 0.45, 0.95]; // out to the side, softly rounded
+const ARMS_HIGH: Limb = [2.75, 0.35, 3.32, -0.74]; // fifth, curved over her head
+const PASSE: Limb = [1.2, 0.6, -0.88, -0.71]; // toe drawn up to the other knee
+const BALLERINA_BLEND_MS = 280; // one move melts into the next over this long
+const BALLERINA_GAP_MS: [number, number] = [8000, 20000]; // after she has gone
+const SPARKLE_MS = 1000;
+// Two routines, so it isn't the same dance every time.
+const DANCES: Step[][] = [
+  [['bourree', 2000], ['jete', 1100], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1300],
+    ['arabesque', 1700], ['bourree', 1000], ['jete', 1100], ['bourree', 1600]],
+  [['bourree', 1800], ['arabesque', 1600], ['bourree', 1000], ['jete', 1100], ['bourree', 900],
+    ['jete', 1100], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1500]],
+];
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function lerpLimb(a: Limb, b: Limb, t: number): Limb {
+  return a.map((v, i) => lerp(v, b[i], t)) as Limb;
+}
+
+// The short way round, so coming out of a double pirouette doesn't unwind it.
+function lerpAngle(a: number, b: number, t: number): number {
+  const d = (((b - a) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+  return a + d * t;
+}
+
+function blendPose(a: Pose, b: Pose, t: number): Pose {
+  return {
+    lift: lerp(a.lift, b.lift, t), lean: lerp(a.lean, b.lean, t), flare: lerp(a.flare, b.flare, t),
+    facing: lerpAngle(a.facing, b.facing, t),
+    legs: [lerpLimb(a.legs[0], b.legs[0], t), lerpLimb(a.legs[1], b.legs[1], t)],
+    arms: [lerpLimb(a.arms[0], b.arms[0], t), lerpLimb(a.arms[1], b.arms[1], t)],
+  };
+}
+
+// `u` runs 0..1 through the move; `t` is the clock, for the quick bourrée flutter.
+function dancePose(move: Move, u: number, t: number): Pose {
+  switch (move) {
+    case 'jete': {
+      const split = Math.pow(Math.sin(Math.PI * u), 0.6);
+      return {
+        lift: Math.sin(Math.PI * u) * 16, lean: 0.12 * split, facing: 0, flare: 0.1 * split,
+        legs: [[-1.3 * split, 0, -1.4 * split, 0], [1.5 * split, 0, 1.55 * split, 0]],
+        arms: [lerpLimb(ARMS_SECOND, [2.2, 0.2, 2.35, 0.1], split), lerpLimb(ARMS_SECOND, [1.45, 1, 1.5, 0.9], split)],
+      };
+    }
+    case 'pirouette': {
+      const up = smooth(0, 0.15, u) * (1 - smooth(0.85, 1, u));
+      return {
+        lift: 1.5 * up, lean: 0, facing: FACING_AUDIENCE + smooth(0.1, 0.9, u) * Math.PI * 4, flare: 0.22 * up,
+        legs: [[0, -0.03, 0, -0.03], lerpLimb(NEUTRAL_LEG, PASSE, up)],
+        arms: [lerpLimb(ARMS_SECOND, ARMS_HIGH, up), lerpLimb(ARMS_SECOND, ARMS_HIGH, up)],
+      };
+    }
+    case 'arabesque': {
+      const hold = smooth(0, 0.2, u) * (1 - smooth(0.8, 1, u));
+      return {
+        lift: 0.5, lean: 0.35 * hold, facing: FACING_AUDIENCE * (1 - hold), flare: 0,
+        legs: [[0, 0, 0, 0], lerpLimb(NEUTRAL_LEG, [-1.45, 0, -1.5, 0], hold)],
+        arms: [lerpLimb(ARMS_SECOND, [1.9, 0.1, 1.95, 0.05], hold), lerpLimb(ARMS_SECOND, [1.3, 1.05, 1.25, 1], hold)],
+      };
+    }
+    default: {
+      // Bourrée: tiny quick steps on pointe, feet crossed close together.
+      const step = Math.sin(t / 45);
+      const flutter = Math.sin(t / 400) * 0.05;
+      return {
+        lift: 0.4 * Math.abs(step), lean: 0, facing: FACING_AUDIENCE, flare: 0,
+        legs: [
+          [0.06 * step, -0.05, 0.06 * step - 0.12 * Math.max(0, step), -0.05],
+          [-0.06 * step, -0.05, -0.06 * step - 0.12 * Math.max(0, -step), -0.05],
+        ],
+        arms: [[ARMS_SECOND[0] + flutter, ...ARMS_SECOND.slice(1)] as Limb, [ARMS_SECOND[0] - flutter, ...ARMS_SECOND.slice(1)] as Limb],
+      };
+    }
+  }
+}
+
+// How far a move carries her, in ms of plain bourrée travel: a jeté surges forward, a
+// pirouette nearly stops, and every move starts and ends at the same speed so nothing jerks.
+function danceDistance(move: Move, u: number): number {
+  const surge = { bourree: 0, jete: 1.4, pirouette: -0.9, arabesque: -0.3 }[move];
+  return u + (surge * (1 - Math.cos(Math.PI * u))) / Math.PI;
+}
+
+function limbDir(swing: number, side: number, z: number): P3 {
+  return [Math.sin(swing) * Math.cos(side), Math.cos(swing) * Math.cos(side), Math.sin(side) * z];
+}
+
+function buildDancer(pose: Pose) {
+  const hipY = HIP_Y - pose.lift;
+  const reach = (from: P3, dir: P3, length: number): P3 =>
+    [from[0] + dir[0] * length, from[1] + dir[1] * length, from[2] + dir[2] * length];
+  const legs = pose.legs.map((l, i) => {
+    const z = i === 0 ? -1 : 1;
+    const top: P3 = [0, hipY, 3.2 * z];
+    const knee = reach(top, limbDir(l[0], l[1], z), THIGH);
+    return [top, knee, reach(knee, limbDir(l[2], l[3], z), SHIN)];
+  });
+  // The upper body is built upright, then tipped forward about the hip by `lean`.
+  const c = Math.cos(pose.lean);
+  const s = Math.sin(pose.lean);
+  const upper = ([x, y, z]: P3): P3 => [x * c - y * s, hipY + x * s + y * c, z];
+  const arms = pose.arms.map((a, i) => {
+    const z = i === 0 ? -1 : 1;
+    const shoulder: P3 = [0, -TORSO, 5.5 * z];
+    const elbow = reach(shoulder, limbDir(a[0], a[1], z), UPPER_ARM);
+    return [shoulder, elbow, reach(elbow, limbDir(a[2], a[3], z), FOREARM)].map(upper);
+  });
+  return {
+    legs, arms,
+    waist: upper([0, -3, 0]), chest: upper([0, -15, 0]), neck: upper([0, -TORSO - 3, 0]),
+    head: upper([0.6, -TORSO - 7.4, 0]), bun: upper([-2.2, -TORSO - 11, 0]), tutu: upper([0, -1.5, 0]),
+  };
+}
+
 export default function DreamSky({
   lanterns: posts = [], quiet = false, seed = 7,
 }: {
@@ -274,6 +413,10 @@ export default function DreamSky({
     let unicorn = { from: -1e9, direction: -1, y: 0 };
     let nextUnicornAt = startedAt + between([14000, 30000], gap);
     const unicornTrail: { x: number; y: number }[] = [];
+    let ballerina = { from: -1e9, direction: 1, dance: DANCES[0], ms: 0, distance: 1 };
+    let nextBallerinaAt = startedAt + between([3000, 6000], gap);
+    const sparkles: { x: number; y: number; born: number; size: number }[] = [];
+    let lastSparkleAt = 0;
 
     function readTheme() {
       const root = document.documentElement;
@@ -599,7 +742,184 @@ export default function DreamSky({
           ctx!.restore();
         }
       }
+      // The ballerina dances across the bottom of the sky, then rests a while.
+      if (now >= nextBallerinaAt && now - ballerina.from > ballerina.ms) {
+        const dance = DANCES[Math.floor(Math.random() * DANCES.length)];
+        ballerina = {
+          from: now, direction: Math.random() < 0.5 ? 1 : -1, dance,
+          ms: dance.reduce((sum, [, ms]) => sum + ms, 0),
+          distance: dance.reduce((sum, [move, ms]) => sum + ms * danceDistance(move, 1), 0),
+        };
+        nextBallerinaAt = now + ballerina.ms + between(BALLERINA_GAP_MS, gap);
+      }
+      const bt = now - ballerina.from;
+      if (bt >= 0 && bt <= ballerina.ms) drawBallerina(now, bt);
+      drawSparkles(now);
       ctx!.lineCap = 'butt';
+      ctx!.lineJoin = 'miter';
+    }
+
+    function drawBallerina(now: number, elapsed: number) {
+      // Which move she is in, how far into it, and how far she has travelled so far.
+      let start = 0;
+      let travelled = 0;
+      let index = 0;
+      while (index < ballerina.dance.length - 1 && elapsed > start + ballerina.dance[index][1]) {
+        const [move, ms] = ballerina.dance[index];
+        start += ms;
+        travelled += ms * danceDistance(move, 1);
+        index++;
+      }
+      const [move, ms] = ballerina.dance[index];
+      const into = elapsed - start;
+      const u = Math.min(1, into / ms);
+      travelled += ms * danceDistance(move, u);
+      let pose = dancePose(move, u, now);
+      if (index > 0 && into < BALLERINA_BLEND_MS) {
+        pose = blendPose(dancePose(ballerina.dance[index - 1][0], 1, now), pose, smooth(0, BALLERINA_BLEND_MS, into));
+      }
+
+      const size = small ? 1 : 1.3;
+      const margin = 40 * size;
+      const along = -margin + (travelled / ballerina.distance) * (width + margin * 2);
+      const footX = ballerina.direction === 1 ? along : width - along;
+      const floorY = height - (small ? 16 : 26);
+      const cosF = Math.cos(pose.facing);
+      const sinF = Math.sin(pose.facing);
+      const project = ([x, y, z]: P3) => ({
+        x: footX + ballerina.direction * (x * cosF + z * sinF) * size,
+        y: floorY + y * size,
+        z: -x * sinF + z * cosF, // bigger is farther from the viewer
+      });
+      const dancer = buildDancer(pose);
+      const legs = dancer.legs.map(l => l.map(project));
+      const arms = dancer.arms.map(a => a.map(project));
+      const depth = (points: { z: number }[]) => points.reduce((sum, p) => sum + p.z, 0) / points.length;
+      const fade = quiet ? 0.75 : 1;
+
+      const skin = dark ? 'rgb(255,232,242)' : mix(brandTo, [40, 20, 60], 0.5);
+      const dress = `rgb(${brandFrom.join(',')})`;
+      const dressLight = mix(brandFrom, [255, 255, 255], 0.5);
+      const dressDeep = mix(brandFrom, [40, 10, 50], 0.3);
+
+      // A spotlight pool by night, a soft shadow by day, shrinking as she leaves the ground.
+      const ground = 1 - Math.min(1, pose.lift / 40) * 0.5;
+      ctx!.save();
+      ctx!.translate(footX, floorY + 1);
+      ctx!.scale(1, 0.2);
+      const poolRadius = (dark ? 34 : 20) * size * ground;
+      const pool = ctx!.createRadialGradient(0, 0, 0, 0, 0, poolRadius);
+      const poolColor = dark ? brandFrom.join(',') : '60,30,80';
+      pool.addColorStop(0, `rgba(${poolColor},${(dark ? 0.35 : 0.16) * fade})`);
+      pool.addColorStop(1, `rgba(${poolColor},0)`);
+      ctx!.globalAlpha = 1;
+      ctx!.fillStyle = pool;
+      ctx!.beginPath();
+      ctx!.arc(0, 0, poolRadius, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.restore();
+
+      ctx!.save();
+      ctx!.globalAlpha = fade;
+      ctx!.lineCap = 'round';
+      ctx!.lineJoin = 'round';
+      if (dark) {
+        ctx!.shadowColor = `rgba(${brandFrom.join(',')},0.8)`;
+        ctx!.shadowBlur = 10;
+      }
+      const stroke = (points: { x: number; y: number }[], lineWidth: number, color: string) => {
+        ctx!.strokeStyle = color;
+        ctx!.lineWidth = lineWidth * size;
+        ctx!.beginPath();
+        points.forEach((p, i) => (i === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y)));
+        ctx!.stroke();
+      };
+      const dot = (p: { x: number; y: number }, r: number, color: string) => {
+        ctx!.fillStyle = color;
+        ctx!.beginPath();
+        ctx!.arc(p.x, p.y, r * size, 0, Math.PI * 2);
+        ctx!.fill();
+      };
+
+      // Back to front: arms behind her body, legs, tutu, body and head, then the near arms.
+      const armOrder = [0, 1].sort((a, b) => depth(arms[b]) - depth(arms[a]));
+      const behind = armOrder.filter(i => depth(arms[i]) > 1);
+      const before = armOrder.filter(i => depth(arms[i]) <= 1);
+      for (const i of behind) stroke(arms[i], 1.8, skin);
+      for (const i of [0, 1].sort((a, b) => depth(legs[b]) - depth(legs[a]))) stroke(legs[i], 2.6, skin);
+
+      // The tutu: a flat disc of net with a scalloped edge that turns as she turns.
+      const tutu = project(dancer.tutu);
+      ctx!.save();
+      ctx!.translate(tutu.x, tutu.y);
+      ctx!.rotate(ballerina.direction * pose.lean * cosF * 0.7);
+      const rx = 14 * size * (1 + pose.flare);
+      const ry = 3.4 * size * (1 + pose.flare * 0.5);
+      ctx!.fillStyle = dressDeep;
+      ctx!.beginPath();
+      ctx!.ellipse(0, size, rx, ry, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.fillStyle = dressLight;
+      for (let k = 0; k < 14; k++) {
+        const a = (k / 14) * Math.PI * 2 + pose.facing * ballerina.direction;
+        ctx!.beginPath();
+        ctx!.arc(Math.cos(a) * rx, Math.sin(a) * ry + 0.6 * size, 2.4 * size * (1 + pose.flare * 0.5), 0, Math.PI * 2);
+        ctx!.fill();
+      }
+      const net = ctx!.createLinearGradient(0, -ry, 0, ry);
+      net.addColorStop(0, dressLight);
+      net.addColorStop(1, dress);
+      ctx!.fillStyle = net;
+      ctx!.beginPath();
+      ctx!.ellipse(0, 0, rx * 0.86, ry * 0.8, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.restore();
+
+      // Bodice in the tutu's colour, then neck, head and the bun on top.
+      const shoulders = [arms[0][0], arms[1][0]];
+      stroke([project(dancer.waist), project(dancer.chest)], 6, dress);
+      stroke(shoulders, 2.6, dress);
+      stroke([project(dancer.chest), project(dancer.neck)], 2, skin);
+      const head = project(dancer.head);
+      const bun = project(dancer.bun);
+      if (bun.z > head.z) dot(bun, 2.4, skin);
+      dot(head, 4.4, skin);
+      if (bun.z <= head.z) dot(bun, 2.4, skin);
+      for (const i of before) stroke(arms[i], 1.8, skin);
+      ctx!.restore();
+
+      // Sparkles shake off her toes while she leaps and spins.
+      if ((pose.lift > 6 || pose.flare > 0.05) && now - lastSparkleAt > 70) {
+        lastSparkleAt = now;
+        for (const leg of legs) {
+          const toe = leg[2];
+          sparkles.push({ x: toe.x + (Math.random() - 0.5) * 6, y: toe.y, born: now, size: (2 + Math.random() * 2.5) * size });
+        }
+        if (sparkles.length > 60) sparkles.splice(0, sparkles.length - 60);
+      }
+    }
+
+    // A four-pointed twinkle for each sparkle, rising a little as it fades.
+    function drawSparkles(now: number) {
+      while (sparkles.length && now - sparkles[0].born > SPARKLE_MS) sparkles.shift();
+      if (!sparkles.length) return;
+      ctx!.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+      ctx!.fillStyle = dark ? 'rgb(255,240,200)' : `rgb(${brandTo.join(',')})`;
+      for (const s of sparkles) {
+        const age = (now - s.born) / SPARKLE_MS;
+        const x = s.x;
+        const y = s.y - age * 14;
+        const r = s.size * (1 - age * 0.5);
+        ctx!.globalAlpha = (1 - age) * (quiet ? 0.6 : 0.9);
+        ctx!.beginPath();
+        ctx!.moveTo(x, y - r);
+        ctx!.quadraticCurveTo(x, y, x + r, y);
+        ctx!.quadraticCurveTo(x, y, x, y + r);
+        ctx!.quadraticCurveTo(x, y, x - r, y);
+        ctx!.quadraticCurveTo(x, y, x, y - r);
+        ctx!.fill();
+      }
+      ctx!.globalCompositeOperation = 'source-over';
     }
 
     // Theme or dark mode can change without a reload (settings page), so watch for it.
