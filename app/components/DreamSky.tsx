@@ -225,7 +225,7 @@ function between([low, high]: [number, number], factor = 1): number {
 // ---- The ballerina -------------------------------------------------------------------
 // A little dancer in a tutu who crosses the bottom of the sky every so often: tiny bourrée
 // steps, grand jetés, pirouettes and an arabesque glide, plus a few acrobatic tricks: an
-// aerial (a no-handed cartwheel), a needle and a front tuck flip. Like TrackThisRun's runners
+// aerial (a no-handed cartwheel), a needle and a front tuck flip, and a curtsy to finish. Like TrackThisRun's runners
 // she is posed afresh each frame from joint angles, but in 3D, so she can face the audience,
 // turn to profile for a leap, spin on the spot and turn right over. Model units: +x is the way she travels, -y is
 // up with the tips of her pointe shoes on y = 0, and +z is her right side.
@@ -238,7 +238,7 @@ type Pose = {
   lift: number; lean: number; facing: number; flare: number; pitch?: number; roll?: number;
   legs: [Limb, Limb]; arms: [Limb, Limb];
 };
-type Move = 'bourree' | 'jete' | 'pirouette' | 'arabesque' | 'aerial' | 'needle' | 'flip';
+type Move = 'bourree' | 'jete' | 'pirouette' | 'arabesque' | 'aerial' | 'needle' | 'flip' | 'curtsy';
 type Step = [Move, number]; // and how many ms it lasts
 
 const THIGH = 19;
@@ -269,14 +269,15 @@ const SPARKLE_MS = 1000;
 // show starts and swinging to keep her in an oval of light on the floor.
 const SPOT_X = [0.5, 0.2, 0.8]; // where each dancer's lamp hangs, as a share of the width
 const SPOT_FADE_MS = 700;
-// A few routines, so it isn't the same dance every time; the last is mostly acrobatics.
+// A few routines, so it isn't the same dance every time; the last is mostly acrobatics. Each
+// ends with a curtsy to the audience before she bourrées off.
 const DANCES: Step[][] = [
   [['bourree', 2000], ['jete', 1100], ['bourree', 1000], ['aerial', 1200], ['bourree', 1000],
-    ['pirouette', 1700], ['bourree', 1100], ['arabesque', 1700], ['bourree', 1500]],
+    ['pirouette', 1700], ['bourree', 1100], ['arabesque', 1700], ['bourree', 700], ['curtsy', 1900], ['bourree', 1300]],
   [['bourree', 1800], ['needle', 2000], ['bourree', 1000], ['jete', 1100], ['bourree', 900],
-    ['flip', 1200], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1300]],
+    ['flip', 1200], ['bourree', 1200], ['pirouette', 1700], ['bourree', 700], ['curtsy', 1900], ['bourree', 1200]],
   [['bourree', 1600], ['aerial', 1200], ['bourree', 700], ['aerial', 1200], ['bourree', 900],
-    ['needle', 2000], ['bourree', 900], ['flip', 1200], ['bourree', 1400]],
+    ['needle', 2000], ['bourree', 900], ['flip', 1200], ['bourree', 700], ['curtsy', 1900], ['bourree', 1300]],
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -361,6 +362,17 @@ function dancePose(move: Move, u: number, t: number): Pose {
         arms: [arm, arm],
       };
     }
+    case 'curtsy': {
+      // A révérence: turned three-quarters to the audience, one foot slid behind, both knees
+      // bent, arms opened low and head bowed. She slows to a stop for it.
+      const bow = smooth(0, 0.3, u) * (1 - smooth(0.72, 1, u));
+      const arm = lerpLimb(ARMS_SECOND, [0.35, 0.95, 0.55, 1.2], bow);
+      return {
+        lift: -11 * bow, lean: 0.6 * bow, facing: FACING_AUDIENCE - 0.7 * bow, flare: 0.08 * bow,
+        legs: [lerpLimb(NEUTRAL_LEG, [1, 0, -0.5, 0], bow), lerpLimb(NEUTRAL_LEG, [-0.35, -0.15, -1.1, -0.1], bow)],
+        arms: [arm, arm],
+      };
+    }
     default: {
       // Bourrée: tiny quick steps on pointe, feet crossed close together.
       const step = Math.sin(t / 45);
@@ -380,7 +392,7 @@ function dancePose(move: Move, u: number, t: number): Pose {
 // How far a move carries her, in ms of plain bourrée travel: a jeté surges forward, a
 // pirouette nearly stops, and every move starts and ends at the same speed so nothing jerks.
 function danceDistance(move: Move, u: number): number {
-  const surge = { bourree: 0, jete: 1.4, pirouette: -0.9, arabesque: -0.3, aerial: 0.6, needle: -0.9, flip: 0.8 }[move];
+  const surge = { bourree: 0, jete: 1.4, pirouette: -0.9, arabesque: -0.3, aerial: 0.6, needle: -0.9, flip: 0.8, curtsy: -1 }[move];
   return u + (surge * (1 - Math.cos(Math.PI * u))) / Math.PI;
 }
 
@@ -873,12 +885,17 @@ export default function DreamSky({
       const along = -margin - trail + (travelled / ballerina.distance) * (width + margin * 2 + trail);
       const footX = ballerina.direction === 1 ? along : width - along;
       const floorY = height - (small ? 16 : 26) - member.back;
-      return { pose, size, footX, floorY };
+      // How deep into a curtsy she is, so her spotlight can brighten for the bow.
+      const bow = move === 'curtsy' ? Math.sin(Math.PI * u) : 0;
+      return { pose, size, footX, floorY, bow };
     }
 
     // A follow-spot: the lamp hanging from the top edge and aimed at her, a cone of light, and
     // an oval pool on the floor that stays put when she leaps up out of it.
-    function drawSpotlight({ size, footX, floorY }: { size: number; footX: number; floorY: number }, member: Dancer, lights: number) {
+    function drawSpotlight(
+      { size, footX, floorY, bow }: { size: number; footX: number; floorY: number; bow: number },
+      member: Dancer, lights: number,
+    ) {
       const lampX = width * SPOT_X[member.place % SPOT_X.length];
       const lampY = small ? 16 : 22;
       const aim = Math.atan2(floorY - lampY, footX - lampX);
@@ -888,7 +905,7 @@ export default function DreamSky({
       const poolY = 7 * size;
       const tint = member.dress ? mix(member.dress, [255, 255, 255], 0.75) : 'rgb(255,244,214)';
       const light = tint.slice(4, -1); // "r,g,b"
-      const fade = lights * (quiet ? 0.6 : 1);
+      const fade = lights * (quiet ? 0.6 : 1) * (1 + 0.45 * bow);
 
       // The beam: lens to the edges of the pool, brightest at the lamp.
       ctx!.save();
@@ -1049,7 +1066,7 @@ export default function DreamSky({
       for (const i of before) stroke(arms[i], 1.8, skin);
       ctx!.restore();
 
-      // Sparkles shake off her toes while she leaps and spins.
+      // Sparkles shake off her toes while she leaps, spins and bows.
       if ((pose.lift > 6 || pose.flare > 0.05) && now - lastSparkleAt > 70) {
         lastSparkleAt = now;
         for (const leg of legs) {
