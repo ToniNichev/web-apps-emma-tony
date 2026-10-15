@@ -53,7 +53,7 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
   }
 
   return (
-    <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 transition-colors duration-200">
+    <nav className="glass-bar border-b border-gray-100 sticky top-0 z-50 transition-colors duration-200">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">

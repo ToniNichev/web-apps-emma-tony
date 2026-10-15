@@ -2,6 +2,7 @@
 import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import DreamSky from '@/app/components/DreamSky';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
@@ -44,7 +45,7 @@ function ResetPasswordContent() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md card p-8 text-center">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Invalid Reset Link</h2>
           <p className="text-gray-500 mb-6">This password reset link is invalid or has expired. Please request a new one.</p>
@@ -58,7 +59,7 @@ function ResetPasswordContent() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-md card p-8 text-center">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Password Reset Successful!</h2>
           <p className="text-gray-500 mb-6">Your password has been updated. You can now log in with your new password.</p>
@@ -71,7 +72,7 @@ function ResetPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">
@@ -130,12 +131,15 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-white to-purple-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-      </div>
-    }>
-      <ResetPasswordContent />
-    </Suspense>
+    <>
+      <DreamSky seed={31} />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+        </div>
+      }>
+        <ResetPasswordContent />
+      </Suspense>
+    </>
   );
 }

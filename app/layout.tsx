@@ -11,6 +11,7 @@ import ChatPanel from './components/ChatPanel';
 import BottomNav from './components/BottomNav';
 import LeftRail from './components/LeftRail';
 import RightRail from './components/RightRail';
+import SiteSky from './components/SiteSky';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -59,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={classes || undefined}>
       <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased`}>
+        <SiteSky />
         <SocketProvider token={token}>
           {session && <NavBar user={session} siteName={siteName} />}
           <GlobalCallManager />

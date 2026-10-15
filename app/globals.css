@@ -50,10 +50,21 @@ body { background-color: #f9fafb; }
 }
 .luna-sparkle { animation: luna-sparkle 1.6s ease-in-out infinite; }
 
+/* Cards are frosted glass, so the Dream Sky behind every page shows softly through them. */
 .card {
-  background: white;
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* The same glass for the top and bottom navigation bars. */
+.glass-bar {
+  background: rgba(255, 255, 255, 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
 }
 
 /* ── Trivia correct-answer reveal ────────────────────────── */
@@ -126,22 +137,12 @@ html.dark body {
 }
 
 html.dark .card {
-  background: #1e293b;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-}
-
-/* Frosted glass cards for the home feed, so the Dream Sky shows softly through them. */
-.card.glass-card {
-  background: rgba(255, 255, 255, 0.55);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  backdrop-filter: blur(12px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-html.dark .card.glass-card {
   background: rgba(30, 41, 59, 0.5);
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+html.dark .glass-bar {
+  background: rgba(15, 23, 42, 0.6);
 }
 
 html.dark .challenge-header-past {
