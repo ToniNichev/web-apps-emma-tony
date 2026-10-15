@@ -265,6 +265,10 @@ type Dancer = { place: number; delay: number; scale: number; back: number; dress
 const SOLO: Dancer[] = [{ place: 0, delay: 0, scale: 1, back: 0, dress: null }];
 const TROUPE_DRESSES: [number, number, number][] = [[186, 150, 255], [120, 214, 180], [255, 178, 102], [125, 190, 255]];
 const SPARKLE_MS = 1000;
+// Theatre follow-spots: a lamp hanging from the top edge for each dancer, switching on as the
+// show starts and swinging to keep her in an oval of light on the floor.
+const SPOT_X = [0.5, 0.2, 0.8]; // where each dancer's lamp hangs, as a share of the width
+const SPOT_FADE_MS = 700;
 // A few routines, so it isn't the same dance every time; the last is mostly acrobatics.
 const DANCES: Step[][] = [
   [['bourree', 2000], ['jete', 1100], ['bourree', 1000], ['aerial', 1200], ['bourree', 1000],
@@ -821,18 +825,29 @@ export default function DreamSky({
         };
         nextBallerinaAt = now + ballerina.ms + between(BALLERINA_GAP_MS, gap);
       }
-      // The ones further back first, so the leader is drawn in front.
-      for (let k = ballerina.troupe.length - 1; k >= 0; k--) {
-        const dancer = ballerina.troupe[k];
-        const bt = now - ballerina.from - dancer.delay;
-        if (bt >= 0 && bt <= ballerina.ms - ballerina.troupe[ballerina.troupe.length - 1].delay) drawBallerina(now, bt, dancer);
+      const showTime = now - ballerina.from;
+      if (showTime >= 0 && showTime <= ballerina.ms) {
+        const danceMs = ballerina.ms - ballerina.troupe[ballerina.troupe.length - 1].delay;
+        const lights = smooth(0, SPOT_FADE_MS, showTime) * (1 - smooth(ballerina.ms - SPOT_FADE_MS, ballerina.ms, showTime));
+        // Lights first, so every dancer stands in front of every beam.
+        for (const dancer of ballerina.troupe) {
+          const bt = Math.min(danceMs, Math.max(0, showTime - dancer.delay));
+          drawSpotlight(placeDancer(now, bt, dancer), dancer, lights);
+        }
+        // The ones further back first, so the leader is drawn in front.
+        for (let k = ballerina.troupe.length - 1; k >= 0; k--) {
+          const dancer = ballerina.troupe[k];
+          const bt = showTime - dancer.delay;
+          if (bt >= 0 && bt <= danceMs) drawBallerina(now, bt, dancer);
+        }
       }
       drawSparkles(now);
       ctx!.lineCap = 'butt';
       ctx!.lineJoin = 'miter';
     }
 
-    function drawBallerina(now: number, elapsed: number, member: Dancer) {
+    // Where a dancer is and how she stands, `elapsed` ms into her routine.
+    function placeDancer(now: number, elapsed: number, member: Dancer) {
       // Which move she is in, how far into it, and how far she has travelled so far.
       let start = 0;
       let travelled = 0;
@@ -858,6 +873,76 @@ export default function DreamSky({
       const along = -margin - trail + (travelled / ballerina.distance) * (width + margin * 2 + trail);
       const footX = ballerina.direction === 1 ? along : width - along;
       const floorY = height - (small ? 16 : 26) - member.back;
+      return { pose, size, footX, floorY };
+    }
+
+    // A follow-spot: the lamp hanging from the top edge and aimed at her, a cone of light, and
+    // an oval pool on the floor that stays put when she leaps up out of it.
+    function drawSpotlight({ size, footX, floorY }: { size: number; footX: number; floorY: number }, member: Dancer, lights: number) {
+      const lampX = width * SPOT_X[member.place % SPOT_X.length];
+      const lampY = small ? 16 : 22;
+      const aim = Math.atan2(floorY - lampY, footX - lampX);
+      const lensX = lampX + Math.cos(aim) * 13;
+      const lensY = lampY + Math.sin(aim) * 13;
+      const poolX = 34 * size;
+      const poolY = 7 * size;
+      const tint = member.dress ? mix(member.dress, [255, 255, 255], 0.75) : 'rgb(255,244,214)';
+      const light = tint.slice(4, -1); // "r,g,b"
+      const fade = lights * (quiet ? 0.6 : 1);
+
+      // The beam: lens to the edges of the pool, brightest at the lamp.
+      ctx!.save();
+      ctx!.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+      const beam = ctx!.createLinearGradient(lensX, lensY, footX, floorY);
+      beam.addColorStop(0, `rgba(${light},${(dark ? 0.22 : 0.4) * fade})`);
+      beam.addColorStop(1, `rgba(${light},${(dark ? 0.06 : 0.12) * fade})`);
+      ctx!.fillStyle = beam;
+      ctx!.beginPath();
+      ctx!.moveTo(lensX - Math.sin(aim) * 4, lensY + Math.cos(aim) * 4);
+      ctx!.lineTo(lensX + Math.sin(aim) * 4, lensY - Math.cos(aim) * 4);
+      ctx!.lineTo(footX + poolX, floorY);
+      ctx!.lineTo(footX - poolX, floorY);
+      ctx!.closePath();
+      ctx!.fill();
+
+      // The pool of light on the floor.
+      ctx!.translate(footX, floorY);
+      ctx!.scale(1, poolY / poolX);
+      const pool = ctx!.createRadialGradient(0, 0, 0, 0, 0, poolX);
+      pool.addColorStop(0, `rgba(${light},${(dark ? 0.5 : 0.95) * fade})`);
+      pool.addColorStop(0.7, `rgba(${light},${(dark ? 0.3 : 0.6) * fade})`);
+      pool.addColorStop(1, `rgba(${light},0)`);
+      ctx!.fillStyle = pool;
+      ctx!.beginPath();
+      ctx!.arc(0, 0, poolX, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.restore();
+
+      // The lamp: a short hanger, then a can turned to aim at her, with a glowing lens.
+      ctx!.save();
+      ctx!.globalAlpha = smooth(0, 0.3, lights) * (quiet ? 0.7 : 1);
+      ctx!.strokeStyle = dark ? 'rgb(120,116,150)' : 'rgb(90,80,110)';
+      ctx!.lineWidth = 2;
+      ctx!.beginPath();
+      ctx!.moveTo(lampX, 0);
+      ctx!.lineTo(lampX, lampY);
+      ctx!.stroke();
+      ctx!.translate(lampX, lampY);
+      ctx!.rotate(aim);
+      ctx!.fillStyle = dark ? 'rgb(70,66,96)' : 'rgb(74,64,92)';
+      ctx!.beginPath();
+      ctx!.roundRect(-9, -6, 20, 12, 3);
+      ctx!.fill();
+      ctx!.fillRect(10, -7.5, 3, 15); // the barrel's rim
+      ctx!.fillStyle = `rgba(${light},${0.4 + 0.6 * lights})`;
+      ctx!.beginPath();
+      ctx!.ellipse(13.5, 0, 2, 6, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.restore();
+    }
+
+    function drawBallerina(now: number, elapsed: number, member: Dancer) {
+      const { pose, size, footX, floorY } = placeDancer(now, elapsed, member);
       const cosF = Math.cos(pose.facing);
       const sinF = Math.sin(pose.facing);
       const project = ([x, y, z]: P3) => ({
@@ -877,15 +962,15 @@ export default function DreamSky({
       const dressLight = mix(dressBase, [255, 255, 255], 0.5);
       const dressDeep = mix(dressBase, [40, 10, 50], 0.3);
 
-      // A spotlight pool by night, a soft shadow by day, shrinking as she leaves the ground.
+      // A soft shadow at her feet inside the spotlight, shrinking as she leaves the ground.
       const ground = 1 - Math.min(1, pose.lift / 40) * 0.5;
       ctx!.save();
       ctx!.translate(footX, floorY + 1);
       ctx!.scale(1, 0.2);
-      const poolRadius = (dark ? 34 : 20) * size * ground;
+      const poolRadius = 20 * size * ground;
       const pool = ctx!.createRadialGradient(0, 0, 0, 0, 0, poolRadius);
-      const poolColor = dark ? brandFrom.join(',') : '60,30,80';
-      pool.addColorStop(0, `rgba(${poolColor},${(dark ? 0.35 : 0.16) * fade})`);
+      const poolColor = dark ? '20,10,40' : '60,30,80';
+      pool.addColorStop(0, `rgba(${poolColor},${(dark ? 0.4 : 0.18) * fade})`);
       pool.addColorStop(1, `rgba(${poolColor},0)`);
       ctx!.globalAlpha = 1;
       ctx!.fillStyle = pool;
