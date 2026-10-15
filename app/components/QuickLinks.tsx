@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-// Mobile/tablet counterpart to the desktop LeftRail (hidden below lg) —
+// Phone counterpart to the side menu (hidden below md) —
 // same destinations, same always-visible reasoning: for a kid-facing app,
 // nesting Play/Challenges/Kindness/Leaderboard behind the profile dropdown
 // is worse discoverability than a Facebook/Reddit-style always-visible nav.
@@ -17,7 +17,7 @@ const FAMILY_LINK = { href: '/family-chat', emoji: '🏡', label: 'Family Chat' 
 export default function QuickLinks({ family }: { family: number }) {
   const links = family !== 0 ? [...LINKS, FAMILY_LINK] : LINKS;
   return (
-    <div className="card p-4 mb-4 overflow-x-auto lg:hidden">
+    <div className="card p-4 mb-4 overflow-x-auto md:hidden">
       <div className="flex gap-4 min-w-0">
         {links.map(l => (
           <Link key={l.href} href={l.href} className="flex flex-col items-center gap-1 flex-shrink-0">

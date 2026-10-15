@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {session && <NavBar user={session} siteName={siteName} />}
           <GlobalCallManager />
           {session ? (
-            <div className="max-w-7xl mx-auto lg:px-4 flex gap-6 items-start">
+            <div className="max-w-7xl mx-auto md:px-3 lg:px-4 flex gap-4 lg:gap-6 items-start">
               <LeftRail user={session} />
               <div className="flex-1 min-w-0">{children}</div>
               <RightRail family={session.family} />

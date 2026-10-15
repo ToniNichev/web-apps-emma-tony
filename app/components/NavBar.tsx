@@ -65,20 +65,6 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
         <div className="flex items-center gap-1">
           <NotificationBell />
 
-          {/* Hidden on mobile — covered by bottom nav */}
-          <Link href="/messages" className="hidden md:flex text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-50" title="Messages">
-            💬
-          </Link>
-          <Link href="/search" className="hidden md:flex text-gray-400 hover:text-gray-600 transition p-2 rounded-full hover:bg-gray-50" title="Search">
-            🔍
-          </Link>
-          <Link
-            href="/create"
-            className="hidden md:inline-flex brand-gradient text-white text-sm font-semibold px-4 py-2 rounded-full hover:opacity-90 transition ml-1"
-          >
-            + Post
-          </Link>
-
           {/* Profile dropdown */}
           <div className="relative ml-1" ref={menuRef}>
             <button
@@ -114,11 +100,9 @@ export default function NavBar({ user, siteName = "Emma's Space" }: NavBarProps)
                 >
                   <span>⚙️</span> Settings
                 </Link>
-                {/* Play/Challenges/Kindness/Leaderboard deliberately live outside
-                    this menu now — always-visible via the left rail (desktop)
-                    and the quick-links strip + bottom nav (mobile/tablet)
-                    instead of nested behind the profile circle. This menu is
-                    account actions only. */}
+                {/* The site's sections live in the side menu (tablet/desktop) and the
+                    bottom bar (phones), always visible rather than nested behind the
+                    profile circle. This menu is account actions only. */}
                 {user.is_admin ? (
                   <Link
                     href="/admin"

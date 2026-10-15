@@ -60,6 +60,16 @@ body { background-color: #f9fafb; }
   box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
+/* The page you're on, in the side menu and the phone's More sheet. */
+.nav-active {
+  background: var(--brand-light);
+  color: var(--brand-color);
+}
+html.dark .nav-active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--brand-from);
+}
+
 /* The same glass for the top and bottom navigation bars. */
 .glass-bar {
   background: rgba(255, 255, 255, 0.6);
