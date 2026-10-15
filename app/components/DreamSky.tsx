@@ -224,15 +224,21 @@ function between([low, high]: [number, number], factor = 1): number {
 
 // ---- The ballerina -------------------------------------------------------------------
 // A little dancer in a tutu who crosses the bottom of the sky every so often: tiny bourrée
-// steps, grand jetés, pirouettes and an arabesque glide. Like TrackThisRun's runners she is
-// posed afresh each frame from joint angles, but in 3D, so she can face the audience, turn
-// to profile for a leap and spin on the spot. Model units: +x is the way she travels, -y is
+// steps, grand jetés, pirouettes and an arabesque glide, plus a few acrobatic tricks: an
+// aerial (a no-handed cartwheel), a needle and a front tuck flip. Like TrackThisRun's runners
+// she is posed afresh each frame from joint angles, but in 3D, so she can face the audience,
+// turn to profile for a leap, spin on the spot and turn right over. Model units: +x is the way she travels, -y is
 // up with the tips of her pointe shoes on y = 0, and +z is her right side.
 
 type P3 = [number, number, number];
 type Limb = [number, number, number, number]; // upper segment [swing, side], lower [swing, side]
-type Pose = { lift: number; lean: number; facing: number; flare: number; legs: [Limb, Limb]; arms: [Limb, Limb] };
-type Move = 'bourree' | 'jete' | 'pirouette' | 'arabesque';
+// `pitch` turns her whole body head-over-heels forward (a flip), `roll` sideways in the
+// plane she faces (a cartwheel); both about the hip.
+type Pose = {
+  lift: number; lean: number; facing: number; flare: number; pitch?: number; roll?: number;
+  legs: [Limb, Limb]; arms: [Limb, Limb];
+};
+type Move = 'bourree' | 'jete' | 'pirouette' | 'arabesque' | 'aerial' | 'needle' | 'flip';
 type Step = [Move, number]; // and how many ms it lasts
 
 const THIGH = 19;
@@ -259,12 +265,14 @@ type Dancer = { place: number; delay: number; scale: number; back: number; dress
 const SOLO: Dancer[] = [{ place: 0, delay: 0, scale: 1, back: 0, dress: null }];
 const TROUPE_DRESSES: [number, number, number][] = [[186, 150, 255], [120, 214, 180], [255, 178, 102], [125, 190, 255]];
 const SPARKLE_MS = 1000;
-// Two routines, so it isn't the same dance every time.
+// A few routines, so it isn't the same dance every time; the last is mostly acrobatics.
 const DANCES: Step[][] = [
-  [['bourree', 2000], ['jete', 1100], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1300],
-    ['arabesque', 1700], ['bourree', 1000], ['jete', 1100], ['bourree', 1600]],
-  [['bourree', 1800], ['arabesque', 1600], ['bourree', 1000], ['jete', 1100], ['bourree', 900],
-    ['jete', 1100], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1500]],
+  [['bourree', 2000], ['jete', 1100], ['bourree', 1000], ['aerial', 1200], ['bourree', 1000],
+    ['pirouette', 1700], ['bourree', 1100], ['arabesque', 1700], ['bourree', 1500]],
+  [['bourree', 1800], ['needle', 2000], ['bourree', 1000], ['jete', 1100], ['bourree', 900],
+    ['flip', 1200], ['bourree', 1200], ['pirouette', 1700], ['bourree', 1300]],
+  [['bourree', 1600], ['aerial', 1200], ['bourree', 700], ['aerial', 1200], ['bourree', 900],
+    ['needle', 2000], ['bourree', 900], ['flip', 1200], ['bourree', 1400]],
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -285,6 +293,7 @@ function blendPose(a: Pose, b: Pose, t: number): Pose {
   return {
     lift: lerp(a.lift, b.lift, t), lean: lerp(a.lean, b.lean, t), flare: lerp(a.flare, b.flare, t),
     facing: lerpAngle(a.facing, b.facing, t),
+    pitch: lerpAngle(a.pitch ?? 0, b.pitch ?? 0, t), roll: lerpAngle(a.roll ?? 0, b.roll ?? 0, t),
     legs: [lerpLimb(a.legs[0], b.legs[0], t), lerpLimb(a.legs[1], b.legs[1], t)],
     arms: [lerpLimb(a.arms[0], b.arms[0], t), lerpLimb(a.arms[1], b.arms[1], t)],
   };
@@ -317,6 +326,37 @@ function dancePose(move: Move, u: number, t: number): Pose {
         arms: [lerpLimb(ARMS_SECOND, [1.9, 0.1, 1.95, 0.05], hold), lerpLimb(ARMS_SECOND, [1.3, 1.05, 1.25, 1], hold)],
       };
     }
+    case 'aerial': {
+      // Facing the audience, she whips over sideways with her legs in a wide straddle.
+      const open = Math.sin(Math.PI * smooth(0.05, 0.95, u));
+      return {
+        lift: Math.sin(Math.PI * u) * 12, lean: 0, facing: FACING_AUDIENCE, flare: 0.2 * open,
+        roll: smooth(0.1, 0.9, u) * Math.PI * 2,
+        legs: [lerpLimb(NEUTRAL_LEG, [0, 0.75, 0, 0.75], open), lerpLimb(NEUTRAL_LEG, [0, 0.75, 0, 0.75], open)],
+        arms: [lerpLimb(ARMS_SECOND, [0, 1.9, 0, 2.1], open), lerpLimb(ARMS_SECOND, [0, 1.9, 0, 2.1], open)],
+      };
+    }
+    case 'needle': {
+      // Chest folded down to the standing leg, the other kicked straight up behind.
+      const hold = smooth(0, 0.25, u) * (1 - smooth(0.78, 1, u));
+      return {
+        lift: 0, lean: 2.3 * hold, facing: FACING_AUDIENCE * (1 - hold), flare: 0,
+        legs: [[0, 0, 0, 0], lerpLimb(NEUTRAL_LEG, [-2.85, 0, -2.9, 0], hold)],
+        arms: [lerpLimb(ARMS_SECOND, [3, 0.2, 3.15, 0.15], hold), lerpLimb(ARMS_SECOND, [3, 0.2, 3.15, 0.15], hold)],
+      };
+    }
+    case 'flip': {
+      // A front tuck: arms up to take off, knees hugged to her chest over the top.
+      const tuck = smooth(0.1, 0.3, u) * (1 - smooth(0.7, 0.9, u));
+      const reach = smooth(0, 0.12, u) * (1 - smooth(0.85, 1, u));
+      const arm = lerpLimb(lerpLimb(ARMS_SECOND, ARMS_HIGH, reach), [1.4, 0.15, 0.6, 0.1], tuck);
+      return {
+        lift: Math.sin(Math.PI * u) * 24, lean: 0, facing: 0, flare: 0.15 * tuck,
+        pitch: smooth(0.15, 0.85, u) * Math.PI * 2,
+        legs: [lerpLimb(NEUTRAL_LEG, [2.1, 0, 0.15, 0], tuck), lerpLimb(NEUTRAL_LEG, [2.1, 0, 0.15, 0], tuck)],
+        arms: [arm, arm],
+      };
+    }
     default: {
       // Bourrée: tiny quick steps on pointe, feet crossed close together.
       const step = Math.sin(t / 45);
@@ -336,7 +376,7 @@ function dancePose(move: Move, u: number, t: number): Pose {
 // How far a move carries her, in ms of plain bourrée travel: a jeté surges forward, a
 // pirouette nearly stops, and every move starts and ends at the same speed so nothing jerks.
 function danceDistance(move: Move, u: number): number {
-  const surge = { bourree: 0, jete: 1.4, pirouette: -0.9, arabesque: -0.3 }[move];
+  const surge = { bourree: 0, jete: 1.4, pirouette: -0.9, arabesque: -0.3, aerial: 0.6, needle: -0.9, flip: 0.8 }[move];
   return u + (surge * (1 - Math.cos(Math.PI * u))) / Math.PI;
 }
 
@@ -364,10 +404,22 @@ function buildDancer(pose: Pose) {
     const elbow = reach(shoulder, limbDir(a[0], a[1], z), UPPER_ARM);
     return [shoulder, elbow, reach(elbow, limbDir(a[2], a[3], z), FOREARM)].map(upper);
   });
+  // Then the whole of her turns about the hip: head over heels for a flip, sideways for an
+  // aerial (her head leads the way she is travelling in both).
+  const cp = Math.cos(pose.pitch ?? 0);
+  const sp = Math.sin(pose.pitch ?? 0);
+  const cr = Math.cos(pose.roll ?? 0);
+  const sr = Math.sin(pose.roll ?? 0);
+  const turn = ([x, y, z]: P3): P3 => {
+    const dy = y - hipY;
+    const px = x * cp - dy * sp;
+    const py = x * sp + dy * cp;
+    return [px, hipY + py * cr + z * sr, -py * sr + z * cr];
+  };
   return {
-    legs, arms,
-    waist: upper([0, -3, 0]), chest: upper([0, -15, 0]), neck: upper([0, -TORSO - 3, 0]),
-    head: upper([0.6, -TORSO - 7.4, 0]), bun: upper([-2.2, -TORSO - 11, 0]), tutu: upper([0, -1.5, 0]),
+    legs: legs.map(l => l.map(turn)), arms: arms.map(a => a.map(turn)),
+    waist: turn(upper([0, -3, 0])), chest: turn(upper([0, -15, 0])), neck: turn(upper([0, -TORSO - 3, 0])),
+    head: turn(upper([0.6, -TORSO - 7.4, 0])), bun: turn(upper([-2.2, -TORSO - 11, 0])), tutu: turn(upper([0, -1.5, 0])),
   };
 }
 
@@ -875,7 +927,8 @@ export default function DreamSky({
       const tutu = project(dancer.tutu);
       ctx!.save();
       ctx!.translate(tutu.x, tutu.y);
-      ctx!.rotate(ballerina.direction * pose.lean * cosF * 0.7);
+      // Tipped with her hips: a lean or flip shows side-on, a cartwheel face-on.
+      ctx!.rotate(ballerina.direction * (((pose.pitch ?? 0) + pose.lean * 0.7) * cosF + (pose.roll ?? 0) * sinF));
       const rx = 14 * size * (1 + pose.flare);
       const ry = 3.4 * size * (1 + pose.flare * 0.5);
       ctx!.fillStyle = dressDeep;
