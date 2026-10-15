@@ -106,13 +106,14 @@ function timeAgo(dateStr: string) {
 }
 
 export default function PostCard({
-  post, currentUserId, isAdmin, isSuperAdmin, onImageClick,
+  post, currentUserId, isAdmin, isSuperAdmin, onImageClick, glass,
 }: {
   post: Post;
   currentUserId: number;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
   onImageClick?: (url: string) => void;
+  glass?: boolean; // frosted and see-through, for the feed where the Dream Sky shows behind
 }) {
   const router = useRouter();
   const [myReaction, setMyReaction] = useState<string | null>(post.my_reaction || null);
@@ -238,7 +239,7 @@ export default function PostCard({
         />
       )}
 
-      <div className={`card overflow-hidden transition-opacity ${hidden ? 'opacity-60 ring-2 ring-orange-300' : ''}`}>
+      <div className={`card ${glass ? 'glass-card' : ''} overflow-hidden transition-opacity ${hidden ? 'opacity-60 ring-2 ring-orange-300' : ''}`}>
         {/* Hidden banner */}
         {hidden && isSuperAdmin && (
           <div className="bg-orange-50 border-b border-orange-200 px-4 py-1.5 flex items-center gap-2">

@@ -58,6 +58,7 @@ export default function Feed({
               currentUserId={currentUserId}
               isAdmin={isAdmin}
               isSuperAdmin={isSuperAdmin}
+              glass
               onImageClick={url => {
                 const idx = gallery.indexOf(url);
                 if (idx !== -1) setLightboxIndex(idx);
