@@ -247,7 +247,17 @@ const ARMS_SECOND: Limb = [0.25, 1.15, 0.45, 0.95]; // out to the side, softly r
 const ARMS_HIGH: Limb = [2.75, 0.35, 3.32, -0.74]; // fifth, curved over her head
 const PASSE: Limb = [1.2, 0.6, -0.88, -0.71]; // toe drawn up to the other knee
 const BALLERINA_BLEND_MS = 280; // one move melts into the next over this long
-const BALLERINA_GAP_MS: [number, number] = [8000, 20000]; // after she has gone
+const BALLERINA_GAP_MS: [number, number] = [4000, 10000]; // after she has gone
+// Now and then a little company dances the routine in canon, each a beat behind the one ahead,
+// so the leaps and turns ripple down the line. They keep a set spacing too, so the line
+// doesn't bunch up when the leader slows for a pirouette. Followers stand a step further back.
+const TROUPE_CHANCE = 0.33;
+const TROUPE_SIZE = 3;
+const CANON_MS = 400;
+const TROUPE_GAP = 52; // model units between one dancer and the next
+type Dancer = { place: number; delay: number; scale: number; back: number; dress: [number, number, number] | null };
+const SOLO: Dancer[] = [{ place: 0, delay: 0, scale: 1, back: 0, dress: null }];
+const TROUPE_DRESSES: [number, number, number][] = [[186, 150, 255], [120, 214, 180], [255, 178, 102], [125, 190, 255]];
 const SPARKLE_MS = 1000;
 // Two routines, so it isn't the same dance every time.
 const DANCES: Step[][] = [
@@ -413,7 +423,7 @@ export default function DreamSky({
     let unicorn = { from: -1e9, direction: -1, y: 0 };
     let nextUnicornAt = startedAt + between([14000, 30000], gap);
     const unicornTrail: { x: number; y: number }[] = [];
-    let ballerina = { from: -1e9, direction: 1, dance: DANCES[0], ms: 0, distance: 1 };
+    let ballerina = { from: -1e9, direction: 1, dance: DANCES[0], ms: 0, distance: 1, troupe: SOLO };
     let nextBallerinaAt = startedAt + between([3000, 6000], gap);
     const sparkles: { x: number; y: number; born: number; size: number }[] = [];
     let lastSparkleAt = 0;
@@ -742,24 +752,35 @@ export default function DreamSky({
           ctx!.restore();
         }
       }
-      // The ballerina dances across the bottom of the sky, then rests a while.
+      // The ballerina (or a little troupe) dances across the bottom of the sky, then rests a while.
       if (now >= nextBallerinaAt && now - ballerina.from > ballerina.ms) {
         const dance = DANCES[Math.floor(Math.random() * DANCES.length)];
+        const dresses = [...TROUPE_DRESSES].sort(() => Math.random() - 0.5);
+        const troupe: Dancer[] = Math.random() < TROUPE_CHANCE
+          ? Array.from({ length: TROUPE_SIZE }, (_, k) => ({
+            place: k, delay: k * CANON_MS, scale: 1 - k * 0.07, back: k * 6, dress: k === 0 ? null : dresses[k - 1],
+          }))
+          : SOLO;
+        const ms = dance.reduce((sum, [, stepMs]) => sum + stepMs, 0);
         ballerina = {
-          from: now, direction: Math.random() < 0.5 ? 1 : -1, dance,
-          ms: dance.reduce((sum, [, ms]) => sum + ms, 0),
-          distance: dance.reduce((sum, [move, ms]) => sum + ms * danceDistance(move, 1), 0),
+          from: now, direction: Math.random() < 0.5 ? 1 : -1, dance, troupe,
+          ms: ms + troupe[troupe.length - 1].delay,
+          distance: dance.reduce((sum, [move, stepMs]) => sum + stepMs * danceDistance(move, 1), 0),
         };
         nextBallerinaAt = now + ballerina.ms + between(BALLERINA_GAP_MS, gap);
       }
-      const bt = now - ballerina.from;
-      if (bt >= 0 && bt <= ballerina.ms) drawBallerina(now, bt);
+      // The ones further back first, so the leader is drawn in front.
+      for (let k = ballerina.troupe.length - 1; k >= 0; k--) {
+        const dancer = ballerina.troupe[k];
+        const bt = now - ballerina.from - dancer.delay;
+        if (bt >= 0 && bt <= ballerina.ms - ballerina.troupe[ballerina.troupe.length - 1].delay) drawBallerina(now, bt, dancer);
+      }
       drawSparkles(now);
       ctx!.lineCap = 'butt';
       ctx!.lineJoin = 'miter';
     }
 
-    function drawBallerina(now: number, elapsed: number) {
+    function drawBallerina(now: number, elapsed: number, member: Dancer) {
       // Which move she is in, how far into it, and how far she has travelled so far.
       let start = 0;
       let travelled = 0;
@@ -779,11 +800,12 @@ export default function DreamSky({
         pose = blendPose(dancePose(ballerina.dance[index - 1][0], 1, now), pose, smooth(0, BALLERINA_BLEND_MS, into));
       }
 
-      const size = small ? 1 : 1.3;
+      const size = (small ? 1 : 1.3) * member.scale;
       const margin = 40 * size;
-      const along = -margin + (travelled / ballerina.distance) * (width + margin * 2);
+      const trail = member.place * TROUPE_GAP * size; // how far this one follows the leader
+      const along = -margin - trail + (travelled / ballerina.distance) * (width + margin * 2 + trail);
       const footX = ballerina.direction === 1 ? along : width - along;
-      const floorY = height - (small ? 16 : 26);
+      const floorY = height - (small ? 16 : 26) - member.back;
       const cosF = Math.cos(pose.facing);
       const sinF = Math.sin(pose.facing);
       const project = ([x, y, z]: P3) => ({
@@ -795,12 +817,13 @@ export default function DreamSky({
       const legs = dancer.legs.map(l => l.map(project));
       const arms = dancer.arms.map(a => a.map(project));
       const depth = (points: { z: number }[]) => points.reduce((sum, p) => sum + p.z, 0) / points.length;
-      const fade = quiet ? 0.75 : 1;
+      const fade = (quiet ? 0.75 : 1) * (1 - member.back * 0.015);
 
       const skin = dark ? 'rgb(255,232,242)' : mix(brandTo, [40, 20, 60], 0.5);
-      const dress = `rgb(${brandFrom.join(',')})`;
-      const dressLight = mix(brandFrom, [255, 255, 255], 0.5);
-      const dressDeep = mix(brandFrom, [40, 10, 50], 0.3);
+      const dressBase = member.dress ?? brandFrom;
+      const dress = `rgb(${dressBase.join(',')})`;
+      const dressLight = mix(dressBase, [255, 255, 255], 0.5);
+      const dressDeep = mix(dressBase, [40, 10, 50], 0.3);
 
       // A spotlight pool by night, a soft shadow by day, shrinking as she leaves the ground.
       const ground = 1 - Math.min(1, pose.lift / 40) * 0.5;
@@ -895,7 +918,7 @@ export default function DreamSky({
           const toe = leg[2];
           sparkles.push({ x: toe.x + (Math.random() - 0.5) * 6, y: toe.y, born: now, size: (2 + Math.random() * 2.5) * size });
         }
-        if (sparkles.length > 60) sparkles.splice(0, sparkles.length - 60);
+        if (sparkles.length > 120) sparkles.splice(0, sparkles.length - 120);
       }
     }
 
