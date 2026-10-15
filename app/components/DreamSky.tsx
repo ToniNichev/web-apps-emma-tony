@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef } from 'react';
 // A twilight sky to sit behind the page: paper lanterns float past as you scroll (and drift
 // slowly toward you even when you don't), fireflies wander, clouds slide by under Luna's
 // moon, and now and then a shooting star, a paper plane or a unicorn with a rainbow
-// trail crosses, and a ballerina dances along the bottom. Further off, a hot air balloon
-// drifts by, a kite is flown up from below, and a flock of birds passes over. Same approach as toni-develops.com's post galaxy and TrackThisRun's
+// trail crosses, a ballerina dances along the bottom and a cyclist rides by (with a wheelie).
+// Further off, a hot air balloon drifts by, a kite is flown up from below, and a flock of
+// birds passes over. Same approach as toni-develops.com's post galaxy and TrackThisRun's
 // route field: a hand-rolled perspective projection on a 2D canvas.
 //
 // Lanterns can come from real posts (one per post, coloured by its author, bigger the more
@@ -68,6 +69,9 @@ const KITE_MS = 24000; // up, flying, and reeled back in
 const KITE_GAP_MS: [number, number] = [20000, 45000];
 const FLOCK_MS = 15000;
 const FLOCK_GAP_MS: [number, number] = [18000, 40000];
+const CYCLIST_MS = 11000;
+const CYCLIST_PEDAL_TURNS = 22; // over the whole crossing
+const CYCLIST_GAP_MS: [number, number] = [25000, 50000];
 
 function hash(n: number): number {
   let h = 2166136261 ^ n;
@@ -447,6 +451,78 @@ function buildDancer(pose: Pose) {
   };
 }
 
+// ---- The cyclist ------------------------------------------------------------------
+// TrackThisRun's wireframe cyclist, given a coloured bike and a helmet: legs follow the pedals,
+// spoked wheels turn, and halfway across the rider pops a wheelie. Same model space as the
+// ballerina: +x forward, -y up, tyres on y = 0, z separates the left limbs from the right.
+
+type Wire = { points: P3[]; lines: [number, number][] };
+
+function wireBuilder() {
+  const wire: Wire = { points: [], lines: [] };
+  const point = (x: number, y: number, z = 0) => wire.points.push([x, y, z]) - 1;
+  const line = (a: number, b: number) => { wire.lines.push([a, b]); };
+  const path = (...ids: number[]) => { for (let i = 1; i < ids.length; i++) line(ids[i - 1], ids[i]); };
+  return { wire, point, line, path };
+}
+
+// The joint between two limbs of the given lengths running from (ax, ay) to (bx, by), bent
+// toward the front of the figure.
+function bend(ax: number, ay: number, bx: number, by: number, upper: number, lower: number): [number, number] {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const reach = Math.min(upper + lower - 0.01, Math.hypot(dx, dy)) || 0.01;
+  const along = (upper * upper - lower * lower + reach * reach) / (2 * reach);
+  const out = Math.sqrt(Math.max(0, upper * upper - along * along));
+  const ux = dx / reach;
+  const uy = dy / reach;
+  const side = uy <= 0 ? 1 : -1; // whichever perpendicular points forward
+  return [ax + ux * along - uy * out * side, ay + uy * along + ux * out * side];
+}
+
+// `phase` is pedal turns. Returns the bike and the rider as separate wires, so each can be
+// drawn in its own colour, and where the head goes.
+function poseCyclist(phase: number) {
+  const crank = phase * Math.PI * 2;
+  const bike = wireBuilder();
+  const rear: [number, number] = [-20, -13];
+  const front: [number, number] = [20, -13];
+  for (const [cx, cy] of [rear, front]) {
+    const rim: number[] = [];
+    for (let i = 0; i < 14; i++) {
+      const a = crank * 0.9 + (i / 14) * Math.PI * 2;
+      rim.push(bike.point(cx + Math.cos(a) * 13, cy + Math.sin(a) * 13));
+    }
+    rim.forEach((id, i) => bike.line(id, rim[(i + 1) % rim.length]));
+    const hub = bike.point(cx, cy);
+    for (let i = 0; i < rim.length; i += 2) bike.line(hub, rim[i]);
+  }
+  const bracket = bike.point(-2, -13);
+  const seat = bike.point(-9, -35);
+  const headTube = bike.point(13, -34);
+  const bars = bike.point(17, -40);
+  bike.path(bike.point(...rear), bracket, seat, bike.point(...rear));
+  bike.path(seat, headTube, bracket);
+  bike.path(bike.point(...front), headTube, bars);
+  bike.line(bike.point(-12, -36), bike.point(-5, -36));
+
+  // Rider: bent over the bars, legs following the pedals.
+  const rider = wireBuilder();
+  const hip: [number, number] = [-8, -38];
+  const shoulder: [number, number] = [7, -53];
+  rider.path(rider.point(...hip), rider.point(...shoulder), rider.point(10, -55.5));
+  const [elbowX, elbowY] = bend(shoulder[0], shoulder[1], 17, -40, 9, 9.5);
+  for (const side of [-1, 1]) {
+    const turn = crank + (side === 1 ? Math.PI : 0);
+    const pedalX = -2 + Math.cos(turn) * 6.5;
+    const pedalY = -13 + Math.sin(turn) * 6.5;
+    const [kneeX, kneeY] = bend(hip[0], hip[1], pedalX, pedalY, 16, 16);
+    rider.path(rider.point(hip[0], hip[1], side * 3), rider.point(kneeX, kneeY, side * 3), rider.point(pedalX, pedalY, side * 3));
+    rider.path(rider.point(shoulder[0], shoulder[1], side * 4), rider.point(elbowX, elbowY - 2, side * 4), rider.point(17, -40, side * 4));
+  }
+  return { bike: bike.wire, rider: rider.wire, head: [12.5, -59, 0] as P3 };
+}
+
 export default function DreamSky({
   lanterns: posts = [], quiet = false, seed = 7,
 }: {
@@ -505,6 +581,8 @@ export default function DreamSky({
     let nextKiteAt = startedAt + between([9000, 18000], gap);
     let flock = { from: -1e9, direction: 1, y: 0, count: 5 };
     let nextFlockAt = startedAt + between([5000, 12000], gap);
+    let cyclist = { from: -1e9, direction: 1, bike: 0, helmet: 1 };
+    let nextCyclistAt = startedAt + between([10000, 20000], gap);
     let ballerina = { from: -1e9, direction: 1, dance: DANCES[0], ms: 0, distance: 1, troupe: SOLO };
     let nextBallerinaAt = startedAt + between([3000, 6000], gap);
     const sparkles: { x: number; y: number; born: number; size: number }[] = [];
@@ -1047,6 +1125,18 @@ export default function DreamSky({
           ctx!.restore();
         }
       }
+      // A cyclist rides along the path just behind the ballerinas' stage, now and then.
+      if (now >= nextCyclistAt && now - cyclist.from > CYCLIST_MS) {
+        const bike = Math.floor(Math.random() * LANTERN_COLORS.length);
+        cyclist = {
+          from: now, direction: Math.random() < 0.5 ? 1 : -1,
+          bike, helmet: (bike + 1 + Math.floor(Math.random() * (LANTERN_COLORS.length - 1))) % LANTERN_COLORS.length,
+        };
+        nextCyclistAt = now + CYCLIST_MS + between(CYCLIST_GAP_MS, gap);
+      }
+      const cp = (now - cyclist.from) / CYCLIST_MS;
+      if (cp >= 0 && cp <= 1) drawCyclist(cp);
+
       // The ballerina (or a little troupe) dances across the bottom of the sky, then rests a while.
       if (now >= nextBallerinaAt && now - ballerina.from > ballerina.ms) {
         const dance = DANCES[Math.floor(Math.random() * DANCES.length)];
@@ -1181,6 +1271,64 @@ export default function DreamSky({
       ctx!.fillStyle = `rgba(${light},${0.4 + 0.6 * lights})`;
       ctx!.beginPath();
       ctx!.ellipse(13.5, 0, 2, 6, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.restore();
+    }
+
+    function drawCyclist(progress: number) {
+      const size = small ? 0.8 : 1;
+      const margin = 50 * size;
+      const along = -margin + progress * (width + margin * 2);
+      const groundX = cyclist.direction === 1 ? along : width - along;
+      const groundY = height - (small ? 34 : 52);
+      // The wheelie: the front wheel lifts about the rear tyre for the middle of the ride.
+      const wheelie = smooth(0.4, 0.47, progress) * (1 - smooth(0.6, 0.68, progress)) * 0.5;
+      const cw = Math.cos(wheelie);
+      const sw = Math.sin(wheelie);
+      const yaw = 0.3; // turned a touch toward us, so the near and far legs separate
+      const project = ([x, y, z]: P3) => {
+        const dx = x + 20; // about the rear tyre's contact point
+        const rx = dx * cw + y * sw - 20;
+        const ry = -dx * sw + y * cw;
+        return {
+          x: groundX + cyclist.direction * (rx * Math.cos(yaw) + z * Math.sin(yaw)) * size,
+          y: groundY + ry * size,
+        };
+      };
+      const { bike, rider, head } = poseCyclist(progress * CYCLIST_PEDAL_TURNS);
+      const strokeWire = (wire: Wire, color: string, lineWidth: number) => {
+        const points = wire.points.map(project);
+        ctx!.strokeStyle = color;
+        ctx!.lineWidth = lineWidth * size;
+        ctx!.beginPath();
+        for (const [a, b] of wire.lines) {
+          ctx!.moveTo(points[a].x, points[a].y);
+          ctx!.lineTo(points[b].x, points[b].y);
+        }
+        ctx!.stroke();
+      };
+
+      ctx!.save();
+      ctx!.globalAlpha = (quiet ? 0.6 : 0.85) * smooth(0, 0.04, progress) * (1 - smooth(0.96, 1, progress));
+      ctx!.lineCap = 'round';
+      ctx!.lineJoin = 'round';
+      // A soft shadow on the path.
+      ctx!.fillStyle = dark ? 'rgba(10,5,30,0.35)' : 'rgba(60,30,80,0.12)';
+      ctx!.beginPath();
+      ctx!.ellipse(groundX, groundY + 1, 32 * size, 3 * size, 0, 0, Math.PI * 2);
+      ctx!.fill();
+      const skin = dark ? 'rgb(255,232,242)' : mix(brandTo, [40, 20, 60], 0.5);
+      strokeWire(bike, `rgb(${LANTERN_COLORS[cyclist.bike][0]})`, 1.8);
+      strokeWire(rider, skin, 2.4);
+      // Head, and a helmet over the top of it.
+      const h = project(head);
+      ctx!.fillStyle = skin;
+      ctx!.beginPath();
+      ctx!.arc(h.x, h.y, 4.6 * size, 0, Math.PI * 2);
+      ctx!.fill();
+      ctx!.fillStyle = `rgb(${LANTERN_COLORS[cyclist.helmet][0]})`;
+      ctx!.beginPath();
+      ctx!.ellipse(h.x, h.y - 1 * size, 6 * size, 4.2 * size, cyclist.direction * -0.25 - cyclist.direction * wheelie, Math.PI, Math.PI * 2);
       ctx!.fill();
       ctx!.restore();
     }
