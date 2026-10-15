@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef } from 'react';
 // A twilight sky to sit behind the page: paper lanterns float past as you scroll (and drift
 // slowly toward you even when you don't), fireflies wander, clouds slide by under Luna's
 // moon, and now and then a shooting star, a paper plane or a unicorn with a rainbow
-// trail crosses, and a ballerina dances along the bottom. Same approach as toni-develops.com's post galaxy and TrackThisRun's
+// trail crosses, and a ballerina dances along the bottom. Further off, a hot air balloon
+// drifts by, a kite is flown up from below, and a flock of birds passes over. Same approach as toni-develops.com's post galaxy and TrackThisRun's
 // route field: a hand-rolled perspective projection on a 2D canvas.
 //
 // Lanterns can come from real posts (one per post, coloured by its author, bigger the more
@@ -60,6 +61,13 @@ const PLANE_GAP_MS: [number, number] = [22000, 45000];
 const UNICORN_MS = 10000;
 const UNICORN_GAP_MS: [number, number] = [40000, 80000];
 const QUIET_GAP_FACTOR = 2.5; // surprises are rarer behind content
+const BALLOON_MS: [number, number] = [38000, 55000]; // a slow drift across
+const BALLOON_GAP_MS: [number, number] = [8000, 25000];
+const BURNER_PERIOD_MS = 7000; // the burner fires for a moment every so often
+const KITE_MS = 24000; // up, flying, and reeled back in
+const KITE_GAP_MS: [number, number] = [20000, 45000];
+const FLOCK_MS = 15000;
+const FLOCK_GAP_MS: [number, number] = [18000, 40000];
 
 function hash(n: number): number {
   let h = 2166136261 ^ n;
@@ -491,6 +499,12 @@ export default function DreamSky({
     let unicorn = { from: -1e9, direction: -1, y: 0 };
     let nextUnicornAt = startedAt + between([14000, 30000], gap);
     const unicornTrail: { x: number; y: number }[] = [];
+    let balloon = { from: -1e9, ms: 0, direction: 1, y: 0, scale: 1, colors: [0, 1], burnerPhase: 0 };
+    let nextBalloonAt = startedAt + between([1500, 5000], gap);
+    let kite = { from: -1e9, anchorX: 0, lean: 0, color: 0 };
+    let nextKiteAt = startedAt + between([9000, 18000], gap);
+    let flock = { from: -1e9, direction: 1, y: 0, count: 5 };
+    let nextFlockAt = startedAt + between([5000, 12000], gap);
     let ballerina = { from: -1e9, direction: 1, dance: DANCES[0], ms: 0, distance: 1, troupe: SOLO };
     let nextBallerinaAt = startedAt + between([3000, 6000], gap);
     const sparkles: { x: number; y: number; born: number; size: number }[] = [];
@@ -673,6 +687,8 @@ export default function DreamSky({
         ctx!.drawImage(sprite, x, cloud.y * height - lookY * 0.4, w, h);
       }
 
+      if (!reducedMotion) drawSkyTravellers(now);
+
       // Lanterns, far to near so the closer ones cover the farther.
       const visible: { x: number; y: number; r: number; alpha: number; color: number; flicker: number; depth: number }[] = [];
       const cx = width / 2;
@@ -714,6 +730,217 @@ export default function DreamSky({
       if (!reducedMotion) drawSurprises(now);
       ctx!.globalAlpha = 1;
       raf = reducedMotion ? 0 : requestAnimationFrame(draw);
+    }
+
+    // The far-off travellers, drawn behind the lanterns: a balloon, a kite and a flock of birds.
+    function drawSkyTravellers(now: number) {
+      // Hot air balloon: drifts across, bobbing; a smaller one is further away and higher.
+      if (now >= nextBalloonAt && now - balloon.from > balloon.ms) {
+        const scale = 0.6 + Math.random() * 0.5;
+        const first = Math.floor(Math.random() * LANTERN_COLORS.length);
+        balloon = {
+          from: now, ms: between(BALLOON_MS) * (1.4 - scale * 0.4), direction: Math.random() < 0.5 ? 1 : -1,
+          y: height * (0.42 - scale * 0.22 + Math.random() * 0.1), scale,
+          colors: [first, (first + 2 + Math.floor(Math.random() * 3)) % LANTERN_COLORS.length],
+          burnerPhase: Math.random() * BURNER_PERIOD_MS,
+        };
+        nextBalloonAt = now + balloon.ms + between(BALLOON_GAP_MS, gap);
+      }
+      const bp = (now - balloon.from) / balloon.ms;
+      if (bp >= 0 && bp <= 1) {
+        const r = 26 * balloon.scale * (small ? 0.75 : 1);
+        const along = -r * 2 + bp * (width + r * 4);
+        const x = balloon.direction === 1 ? along : width - along;
+        const y = balloon.y + Math.sin(now / 4200) * 10 + Math.sin(now / 1700) * 3;
+        const burning = (now + balloon.burnerPhase) % BURNER_PERIOD_MS < 1300;
+        drawBalloon(x, y, r, balloon.colors, burning, now, (quiet ? 0.65 : 0.95) * smooth(0, 0.03, bp) * (1 - smooth(0.97, 1, bp)));
+      }
+
+      // Kite: flown up on a string from somewhere below the bottom edge, off to one side.
+      if (now >= nextKiteAt && now - kite.from > KITE_MS) {
+        const left = Math.random() < 0.5;
+        kite = {
+          from: now,
+          anchorX: width * (left ? 0.12 + Math.random() * 0.15 : 0.73 + Math.random() * 0.15),
+          lean: (left ? -1 : 1) * (0.2 + Math.random() * 0.2), // blown outward, away from the content
+          color: Math.floor(Math.random() * LANTERN_COLORS.length),
+        };
+        nextKiteAt = now + KITE_MS + between(KITE_GAP_MS, gap);
+      }
+      const kp = (now - kite.from) / KITE_MS;
+      if (kp >= 0 && kp <= 1) drawKite(now, kp);
+
+      // A V of birds across the upper sky.
+      if (now >= nextFlockAt && now - flock.from > FLOCK_MS) {
+        flock = {
+          from: now, direction: Math.random() < 0.5 ? 1 : -1,
+          y: height * (0.1 + Math.random() * 0.2), count: 5 + Math.floor(Math.random() * 3),
+        };
+        nextFlockAt = now + FLOCK_MS + between(FLOCK_GAP_MS, gap);
+      }
+      const fp = (now - flock.from) / FLOCK_MS;
+      if (fp >= 0 && fp <= 1) drawFlock(now, fp);
+    }
+
+    // A striped envelope with a soft highlight, ropes down to a little wicker basket, and the
+    // burner's flame (which lights the envelope from inside at night).
+    function drawBalloon(x: number, y: number, r: number, colors: number[], burning: boolean, now: number, alpha: number) {
+      const neckY = y + r * 1.15;
+      const envelope = new Path2D();
+      envelope.moveTo(x - r * 0.3, neckY);
+      envelope.bezierCurveTo(x - r * 1.15, y + r * 0.35, x - r * 1.2, y - r * 1.05, x, y - r * 1.05);
+      envelope.bezierCurveTo(x + r * 1.2, y - r * 1.05, x + r * 1.15, y + r * 0.35, x + r * 0.3, neckY);
+      envelope.closePath();
+
+      ctx!.save();
+      ctx!.globalAlpha = alpha;
+      ctx!.save();
+      ctx!.clip(envelope);
+      // Gores: vertical panels, narrower toward the edges as the envelope curves away.
+      const gores = 8;
+      for (let k = 0; k < gores; k++) {
+        const a = -Math.PI / 2 + (k / gores) * Math.PI;
+        const b = -Math.PI / 2 + ((k + 1) / gores) * Math.PI;
+        ctx!.fillStyle = `rgb(${LANTERN_COLORS[colors[k % 2]][0]})`;
+        ctx!.fillRect(x + Math.sin(a) * r * 1.2, y - r * 1.2, (Math.sin(b) - Math.sin(a)) * r * 1.2 + 0.5, r * 2.5);
+      }
+      const shade = ctx!.createRadialGradient(x - r * 0.4, y - r * 0.5, r * 0.1, x, y, r * 1.3);
+      shade.addColorStop(0, 'rgba(255,255,255,0.45)');
+      shade.addColorStop(0.5, 'rgba(255,255,255,0)');
+      shade.addColorStop(1, 'rgba(40,20,60,0.3)');
+      ctx!.fillStyle = shade;
+      ctx!.fillRect(x - r * 1.3, y - r * 1.2, r * 2.6, r * 2.5);
+      if (burning && dark) {
+        const glow = ctx!.createRadialGradient(x, neckY, 0, x, neckY, r * 1.6);
+        glow.addColorStop(0, 'rgba(255,200,120,0.55)');
+        glow.addColorStop(1, 'rgba(255,200,120,0)');
+        ctx!.fillStyle = glow;
+        ctx!.fillRect(x - r * 1.3, y - r * 1.2, r * 2.6, r * 2.5);
+      }
+      ctx!.restore();
+
+      // Ropes and basket.
+      const basketTop = y + r * 1.55;
+      const basketW = r * 0.42;
+      ctx!.strokeStyle = dark ? 'rgba(200,190,220,0.7)' : 'rgba(90,70,60,0.6)';
+      ctx!.lineWidth = Math.max(0.6, r * 0.03);
+      ctx!.beginPath();
+      ctx!.moveTo(x - r * 0.3, neckY);
+      ctx!.lineTo(x - basketW / 2, basketTop);
+      ctx!.moveTo(x + r * 0.3, neckY);
+      ctx!.lineTo(x + basketW / 2, basketTop);
+      ctx!.stroke();
+      ctx!.fillStyle = dark ? 'rgb(150,110,80)' : 'rgb(170,120,80)';
+      ctx!.beginPath();
+      ctx!.roundRect(x - basketW / 2, basketTop, basketW, r * 0.3, r * 0.05);
+      ctx!.fill();
+      if (burning) {
+        const flicker = 0.8 + 0.2 * Math.sin(now / 40);
+        ctx!.fillStyle = `rgba(255,170,60,${0.9 * flicker})`;
+        ctx!.beginPath();
+        ctx!.ellipse(x, neckY + r * 0.15, r * 0.08, r * 0.22 * flicker, 0, 0, Math.PI * 2);
+        ctx!.fill();
+      }
+      ctx!.restore();
+    }
+
+    // The kite climbs as its string is let out, swoops in the wind, then is reeled back in.
+    function drawKite(now: number, progress: number) {
+      const out = smooth(0, 0.15, progress) * (1 - smooth(0.85, 1, progress));
+      const anchorY = height + 30;
+      const length = out * height * 0.6;
+      const angle = -Math.PI / 2 + kite.lean + Math.sin(now / 1700) * 0.12 + Math.sin(now / 730) * 0.05;
+      const kx = kite.anchorX + Math.cos(angle) * length;
+      const ky = anchorY + Math.sin(angle) * length;
+      const size = small ? 15 : 20;
+      const tilt = Math.sin(now / 900) * 0.25 + kite.lean * 0.5;
+      const [body, glow] = LANTERN_COLORS[kite.color];
+      const alpha = (quiet ? 0.7 : 0.95) * Math.min(1, out * 3);
+
+      ctx!.save();
+      ctx!.globalAlpha = alpha;
+      // The string, sagging a little.
+      ctx!.strokeStyle = dark ? 'rgba(220,220,240,0.5)' : 'rgba(80,70,90,0.45)';
+      ctx!.lineWidth = 1;
+      ctx!.beginPath();
+      ctx!.moveTo(kite.anchorX, anchorY);
+      ctx!.quadraticCurveTo((kite.anchorX + kx) / 2 - kite.lean * 60, (anchorY + ky) / 2 + 30, kx, ky);
+      ctx!.stroke();
+
+      ctx!.translate(kx, ky);
+      ctx!.rotate(tilt);
+      // The tail streams below, rippling, with little bows along it.
+      const segments = 10;
+      const tail: { x: number; y: number }[] = [];
+      for (let i = 0; i <= segments; i++) {
+        const along = size * 1.3 + i * size * 0.45;
+        tail.push({ x: Math.sin(now / 160 - i * 0.7) * i * 0.9 - kite.lean * i * 2, y: along });
+      }
+      ctx!.strokeStyle = dark ? 'rgba(230,230,250,0.7)' : 'rgba(90,80,110,0.6)';
+      ctx!.beginPath();
+      tail.forEach((p, i) => (i === 0 ? ctx!.moveTo(p.x, p.y) : ctx!.lineTo(p.x, p.y)));
+      ctx!.stroke();
+      ctx!.fillStyle = `rgb(${glow})`;
+      for (let i = 3; i <= segments; i += 3) {
+        const p = tail[i];
+        ctx!.beginPath();
+        ctx!.moveTo(p.x, p.y);
+        ctx!.lineTo(p.x - size * 0.3, p.y - size * 0.15);
+        ctx!.lineTo(p.x - size * 0.3, p.y + size * 0.15);
+        ctx!.lineTo(p.x + size * 0.3, p.y - size * 0.15);
+        ctx!.lineTo(p.x + size * 0.3, p.y + size * 0.15);
+        ctx!.closePath();
+        ctx!.fill();
+      }
+      // The diamond, two-tone, with its cross spars.
+      ctx!.fillStyle = `rgb(${glow})`;
+      ctx!.beginPath();
+      ctx!.moveTo(0, -size * 1.2);
+      ctx!.lineTo(-size * 0.8, -size * 0.2);
+      ctx!.lineTo(0, size * 1.3);
+      ctx!.closePath();
+      ctx!.fill();
+      ctx!.fillStyle = `rgb(${body})`;
+      ctx!.beginPath();
+      ctx!.moveTo(0, -size * 1.2);
+      ctx!.lineTo(size * 0.8, -size * 0.2);
+      ctx!.lineTo(0, size * 1.3);
+      ctx!.closePath();
+      ctx!.fill();
+      ctx!.strokeStyle = 'rgba(90,60,50,0.5)';
+      ctx!.beginPath();
+      ctx!.moveTo(0, -size * 1.2);
+      ctx!.lineTo(0, size * 1.3);
+      ctx!.moveTo(-size * 0.8, -size * 0.2);
+      ctx!.lineTo(size * 0.8, -size * 0.2);
+      ctx!.stroke();
+      ctx!.restore();
+    }
+
+    // Birds in a V, wings flapping out of step: dark silhouettes by day, pale ones by night.
+    function drawFlock(now: number, progress: number) {
+      const s = small ? 5 : 7;
+      const along = -s * 30 + progress * (width + s * 60);
+      const leadX = flock.direction === 1 ? along : width - along;
+      const leadY = flock.y + Math.sin(progress * Math.PI * 2) * 12;
+      ctx!.save();
+      ctx!.globalAlpha = (quiet ? 0.6 : 0.85) * smooth(0, 0.04, progress) * (1 - smooth(0.96, 1, progress));
+      ctx!.strokeStyle = dark ? 'rgba(225,230,255,0.7)' : 'rgba(70,55,90,0.65)';
+      ctx!.lineWidth = Math.max(1, s * 0.22);
+      ctx!.lineCap = 'round';
+      for (let i = 0; i < flock.count; i++) {
+        const rank = Math.ceil(i / 2);
+        const side = i % 2 === 0 ? 1 : -1;
+        const bx = leadX - flock.direction * rank * s * 3.2;
+        const by = leadY + side * rank * s * 2.2 + Math.sin(now / 700 + i) * 2;
+        const flap = Math.sin(now / 110 + i * 1.3) * s * 0.6;
+        ctx!.beginPath();
+        ctx!.moveTo(bx - s, by - flap);
+        ctx!.quadraticCurveTo(bx - s * 0.4, by - s * 0.35, bx, by);
+        ctx!.quadraticCurveTo(bx + s * 0.4, by - s * 0.35, bx + s, by - flap);
+        ctx!.stroke();
+      }
+      ctx!.restore();
     }
 
     function drawSurprises(now: number) {
