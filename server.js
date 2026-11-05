@@ -254,15 +254,17 @@ app.prepare().then(() => {
       socket.inEmmasWorld = false;
       emmasWorldPresence.delete(userId);
     });
-    socket.on('emmasworld:move', ({ x, y, z, rotation_y }) => {
+    socket.on('emmasworld:move', ({ x, y, z, rotation_y, on_bike }) => {
       if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return;
       const rotationVal = typeof rotation_y === 'number' ? rotation_y : 0;
+      // Whether the player is riding a bike, so others can see it.
+      const onBike = on_bike === true;
       emmasWorldPresence.set(userId, {
-        x, y, z, rotation_y: rotationVal,
+        x, y, z, rotation_y: rotationVal, on_bike: onBike,
         first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
       });
       socket.to('emmasworld').emit('emmasworld:move', {
-        user_id: userId, x, y, z, rotation_y: rotationVal, t: Date.now(),
+        user_id: userId, x, y, z, rotation_y: rotationVal, on_bike: onBike, t: Date.now(),
         first_name: socket.user.first_name, profile_picture: socket.user.profile_picture,
       });
     });
